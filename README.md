@@ -2,7 +2,7 @@
 
 > **Privacy-first posture guidance for healthier desk work**
 
-Posely is a cross-platform desktop application that monitors posture entirely on-device. Our hybrid stack pairs **Electron React Boilerplate** for the desktop runtime with a **Turborepo + pnpm** monorepo so every surface (desktop, docs, web) can share tooling, configuration, and automation.
+Posely is a cross-platform desktop application that monitors posture entirely on-device. Our hybrid stack pairs **Electron React Boilerplate** for the desktop runtime with a **Turborepo + pnpm** monorepo so every surface (desktop, web) can share tooling, configuration, and automation.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Built with Electron](https://img.shields.io/badge/Electron-Latest-47848F.svg)](https://www.electronjs.org/)
@@ -54,11 +54,7 @@ For packaging builds, clear `BARO_SKIP_ELECTRON_BUILDER` and run `pnpm run deskt
 /
 ├── apps/
 │   ├── desktop/                 # Electron workspace (main, renderer, worker, shared)
-│   ├── docs/                    # Next.js docs scaffold (future external docs)
 │   └── web/                     # Marketing/landing scaffold
-├── docs/                        # Internal product & architecture documentation
-│   ├── architecture/
-│   └── stories/
 ├── packages/
 │   ├── eslint-config/           # Shared ESLint presets
 │   ├── i18n-tools/              # Localization CLI & typed resource generation
@@ -80,7 +76,6 @@ For packaging builds, clear `BARO_SKIP_ELECTRON_BUILDER` and run `pnpm run deskt
 - `apps/desktop/e2e` – Playwright Electron harness and smoke tests.
 - `apps/desktop/INTEGRATION.md` – Detailed log of ERB modifications applied during Turborepo integration.
 - `packages/i18n-tools` – Generates typed locale resources and scanning helpers.
-- `docs/architecture/4-repository-code-structure.md` – Authoritative repository guide and troubleshooting reference.
 
 ---
 
@@ -106,8 +101,6 @@ Turborepo caches `build`, `lint`, `type-check`, and `test` results. Use `turbo r
 - **Unit & Integration**: `pnpm --filter @baro/desktop test` (Vitest). Use `test:watch` and `test:coverage` variants for rapid feedback and HTML reports (`apps/desktop/coverage/`).
 - **End-to-End**: `pnpm --filter @baro/desktop test:e2e` launches Electron via Playwright. Run `pnpm --filter @baro/desktop exec playwright install --with-deps` once to download browsers.
 - **CI**: `.github/workflows/ci.yml` executes `pnpm turbo run type-check lint build`. Release workflows add packaging steps per operating system.
-
-For detailed guidance, see [`docs/architecture/testing-strategy.md`](docs/architecture/testing-strategy.md).
 
 ---
 
@@ -135,9 +128,6 @@ The script runs automatically during `pnpm build` and is enforced by the pre-com
 
 ## 📚 Documentation
 
-- [`docs/architecture/4-repository-code-structure.md`](docs/architecture/4-repository-code-structure.md) – Comprehensive repository guide, workflows, and troubleshooting.
-- [`docs/architecture/2-high-level-architecture-v2.md`](docs/architecture/2-high-level-architecture-v2.md) – Electron process overview and hybrid architecture rationale.
-- [`docs/architecture/testing-strategy.md`](docs/architecture/testing-strategy.md) – Test tooling, execution, and CI integration.
 - [`apps/desktop/INTEGRATION.md`](apps/desktop/INTEGRATION.md) – ERB integration notes and upgrade considerations.
 
 Contribute improvements by updating the relevant document and referencing the story that introduced the change.
