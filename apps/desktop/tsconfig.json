@@ -9,7 +9,6 @@
     "outDir": ".erb/dll",
     "sourceMap": true,
     "baseUrl": ".",
-    "skipLibCheck": true,
     "paths": {
       "@baro/*": [
         "../../packages/*/src",
@@ -23,8 +22,8 @@
     "e2e",
     ".erb/configs",
     ".erb/scripts",
-    "assets/**/*.d.ts",
-    "vitest.config.ts"
+    "scripts",
+    "assets/**/*.d.ts"
   ],
   "exclude": ["release/build", "release/app/dist", ".erb/dll"]
 }
