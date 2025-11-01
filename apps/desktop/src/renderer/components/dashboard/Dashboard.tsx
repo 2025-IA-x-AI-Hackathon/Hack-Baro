@@ -1,11 +1,10 @@
 import { Card, CardBody, CardHeader } from "@heroui/react";
-import { useEffect, useState } from "react";
 
 export const Dashboard = () => {
   // Placeholder data for initial implementation
-  const [streak, setStreak] = useState(12);
-  const [todayScore, setTodayScore] = useState(92);
-  const [weeklyData, setWeeklyData] = useState([
+  const streak = 12;
+  const todayScore = 92;
+  const weeklyData = [
     { day: "Mon", score: 85 },
     { day: "Tue", score: 88 },
     { day: "Wed", score: 90 },
@@ -13,7 +12,7 @@ export const Dashboard = () => {
     { day: "Fri", score: 92 },
     { day: "Sat", score: 89 },
     { day: "Sun", score: 91 },
-  ]);
+  ];
 
   return (
     <div className="flex min-h-screen items-start justify-center bg-neutral-50 p-4">
@@ -64,8 +63,8 @@ export const Dashboard = () => {
           </CardHeader>
           <CardBody className="py-6">
             <div className="flex h-48 items-end justify-around gap-2 px-4">
-              {weeklyData.map((data, index) => (
-                <div key={index} className="flex flex-1 flex-col items-center">
+              {weeklyData.map((data) => (
+                <div key={data.day} className="flex flex-1 flex-col items-center">
                   <div className="relative w-full">
                     <div
                       className="w-full rounded-t-md bg-blue-500 transition-all hover:bg-blue-600"
