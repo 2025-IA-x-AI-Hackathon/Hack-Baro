@@ -81,13 +81,6 @@ const markAsCustom = (value: string): MessageState => ({
 
 function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
   const { t } = useTranslation(["common"]);
-  const preferredDetector =
-    (electron.env?.POSELY_DETECTOR as DetectorKind | undefined) ?? "mediapipe";
-  const detection = useDetectionPipeline({ detector: preferredDetector });
-  const detectionMetrics = detection.metrics;
-  const formatMs = useCallback((value?: number) => {
-    return value === undefined ? "0.0" : value.toFixed(1);
-  }, []);
   const channels = useMemo(() => electron.channels ?? IPC_CHANNELS, [electron]);
   const { ipcRenderer } = electron;
 
@@ -118,6 +111,14 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
 
   const handleOnboardingComplete = useCallback(() => {
     setOnboardingCompleted(true);
+  }, []);
+
+  const preferredDetector =
+    (electron.env?.POSELY_DETECTOR as DetectorKind | undefined) ?? "mediapipe";
+  const detection = useDetectionPipeline({ detector: preferredDetector });
+  const detectionMetrics = detection.metrics;
+  const formatMs = useCallback((value?: number) => {
+    return value === undefined ? "0.0" : value.toFixed(1);
   }, []);
 
   const defaults = useMemo(
@@ -242,7 +243,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
   // Show loading state while checking onboarding status
   if (onboardingCompleted === null) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-amber-300 via-rose-500 to-indigo-700">
         <Card className="bg-white/10 p-10 text-center text-white backdrop-blur">
           <CardBody>
             <p className="text-lg">Loading...</p>
@@ -255,7 +256,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
   // Show onboarding wizard if not completed
   if (!onboardingCompleted) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-amber-300 via-rose-500 to-indigo-700">
         <OnboardingWizardV2
           electron={electron}
           onComplete={handleOnboardingComplete}
