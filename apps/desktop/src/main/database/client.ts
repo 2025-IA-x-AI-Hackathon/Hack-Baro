@@ -64,11 +64,29 @@ const createDatabase = (): BetterSQLite3Database<typeof schema> => {
           seconds_in_yellow INTEGER NOT NULL DEFAULT 0,
           seconds_in_red INTEGER NOT NULL DEFAULT 0,
           avg_score REAL NOT NULL DEFAULT 0,
-          sample_count INTEGER NOT NULL DEFAULT 0
+          sample_count INTEGER NOT NULL DEFAULT 0,
+          meets_goal INTEGER NOT NULL DEFAULT 0
         )
       `,
     )
     .run();
+
+  // Migration: Add meets_goal column if it doesn't exist (for existing databases)
+  try {
+    sqlite
+      .prepare(
+        `ALTER TABLE ${DAILY_POSTURE_LOGS_TABLE} ADD COLUMN meets_goal INTEGER NOT NULL DEFAULT 0`,
+      )
+      .run();
+  } catch (error) {
+    // Column already exists, ignore error
+    if (
+      !(error instanceof Error) ||
+      !error.message.includes("duplicate column name")
+    ) {
+      throw error;
+    }
+  }
 
   return drizzle(sqlite, {
     schema,
