@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { WorkerMessage } from "../../shared/ipcChannels";
 import { WORKER_MESSAGES } from "../../shared/ipcChannels";
 import type { EngineTickPayload } from "../../shared/types/engine-ipc";
