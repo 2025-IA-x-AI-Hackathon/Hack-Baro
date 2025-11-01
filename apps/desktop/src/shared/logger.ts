@@ -197,3 +197,8 @@ export const getLogger = (
   loggerCache.set(cacheKey, logger);
   return logger;
 };
+
+export const toErrorPayload = (error: unknown) => ({
+  error: error instanceof Error ? error.message : String(error),
+  stack: error instanceof Error ? error.stack : undefined,
+});
