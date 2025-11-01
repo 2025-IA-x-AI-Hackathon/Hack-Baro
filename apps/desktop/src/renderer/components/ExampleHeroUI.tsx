@@ -1,17 +1,23 @@
-/* eslint-disable import/prefer-default-export */
 import { Button, Card, Input } from "@heroui/react";
 import { useState } from "react";
+import type { EngineTick } from "../../shared/types/engine-output";
 
 type ExampleHeroUIProps = {
   onPingMain: () => void;
   onPingWorker: () => void;
+  engineTick: EngineTick | null;
 };
 
-export function ExampleHeroUI({
+export default function ExampleHeroUI({
   onPingMain,
   onPingWorker,
+  engineTick = null,
 }: ExampleHeroUIProps) {
   const [name, setName] = useState("");
+  const postureSummary = engineTick
+    ? `${engineTick.zone} • ${engineTick.score.toFixed(1)}`
+    : "No engine data yet";
+  const postureState = engineTick?.state ?? "—";
 
   return (
     <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -71,6 +77,14 @@ export function ExampleHeroUI({
             <dd className="text-default-500 font-medium">
               Ping main or worker to send messages
             </dd>
+          </div>
+          <div className="flex justify-between">
+            <dt>Engine Zone</dt>
+            <dd className="text-foreground font-medium">{postureSummary}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt>Engine State</dt>
+            <dd className="text-default-500 font-medium">{postureState}</dd>
           </div>
         </dl>
       </Card>
