@@ -5,7 +5,7 @@ import {
 } from "drizzle-orm/better-sqlite3";
 import { app } from "electron";
 import path from "path";
-import { CALIBRATION_BASELINES_TABLE, schema } from "./schema";
+import { CALIBRATION_BASELINES_TABLE, SETTINGS_TABLE, schema } from "./schema";
 
 let database: BetterSQLite3Database<typeof schema> | null = null;
 
@@ -33,6 +33,17 @@ const createDatabase = (): BetterSQLite3Database<typeof schema> => {
           created_at INTEGER NOT NULL,
           detector TEXT NOT NULL,
           keypoints_json TEXT NOT NULL
+        )
+      `,
+    )
+    .run();
+
+  sqlite
+    .prepare(
+      `
+        CREATE TABLE IF NOT EXISTS ${SETTINGS_TABLE} (
+          key TEXT PRIMARY KEY NOT NULL,
+          value TEXT NOT NULL
         )
       `,
     )
