@@ -34,6 +34,7 @@ beforeEach(() => {
           secondsInRed: 0,
           avgScore: 0,
           sampleCount: 0,
+          streak: 0,
         },
       });
     } else if (channel === "dashboard:get-weekly-summary") {
@@ -55,12 +56,25 @@ describe("Dashboard Component", () => {
     );
   };
 
-  it("renders the posture streak section with placeholder data", () => {
+  it("renders the posture streak section with dynamic data", async () => {
+    mockInvoke.mockResolvedValue({
+      success: true,
+      data: {
+        date: "2025-11-02",
+        secondsInGreen: 0,
+        secondsInYellow: 0,
+        secondsInRed: 0,
+        avgScore: 0,
+        sampleCount: 0,
+        streak: 5,
+      },
+    });
+
     renderDashboard();
     
     expect(screen.getByText("Posture Streak")).toBeInTheDocument();
     expect(screen.getByText("🔥")).toBeInTheDocument();
-    expect(screen.getByText("12")).toBeInTheDocument();
+    await screen.findByText("5");
     expect(screen.getByText("days")).toBeInTheDocument();
   });
 
@@ -80,6 +94,7 @@ describe("Dashboard Component", () => {
         secondsInRed: 15,
         avgScore: 85.5,
         sampleCount: 180,
+        streak: 12,
       },
     });
 
@@ -100,6 +115,7 @@ describe("Dashboard Component", () => {
         secondsInRed: 0,
         avgScore: 0,
         sampleCount: 0,
+        streak: 0,
       },
     });
 
@@ -147,6 +163,7 @@ describe("Dashboard Component", () => {
             secondsInRed: 0,
             avgScore: 0,
             sampleCount: 0,
+            streak: 0,
           },
         });
       } else if (channel === "dashboard:get-weekly-summary") {
@@ -171,5 +188,87 @@ describe("Dashboard Component", () => {
     renderDashboard();
     
     expect(screen.getByText("Loading chart...")).toBeInTheDocument();
+  });
+
+  describe("Streak Color Coding", () => {
+    it("displays gray color for streak 0-2 days", async () => {
+      mockInvoke.mockResolvedValue({
+        success: true,
+        data: {
+          date: "2025-11-02",
+          secondsInGreen: 0,
+          secondsInYellow: 0,
+          secondsInRed: 0,
+          avgScore: 65,
+          sampleCount: 100,
+          streak: 2,
+        },
+      });
+
+      renderDashboard();
+      
+      const streakElement = await screen.findByText("2");
+      expect(streakElement).toHaveClass("text-gray-500");
+    });
+
+    it("displays yellow color for streak 3-6 days", async () => {
+      mockInvoke.mockResolvedValue({
+        success: true,
+        data: {
+          date: "2025-11-02",
+          secondsInGreen: 0,
+          secondsInYellow: 0,
+          secondsInRed: 0,
+          avgScore: 75,
+          sampleCount: 100,
+          streak: 5,
+        },
+      });
+
+      renderDashboard();
+      
+      const streakElement = await screen.findByText("5");
+      expect(streakElement).toHaveClass("text-yellow-500");
+    });
+
+    it("displays green color for streak 7+ days", async () => {
+      mockInvoke.mockResolvedValue({
+        success: true,
+        data: {
+          date: "2025-11-02",
+          secondsInGreen: 0,
+          secondsInYellow: 0,
+          secondsInRed: 0,
+          avgScore: 85,
+          sampleCount: 100,
+          streak: 10,
+        },
+      });
+
+      renderDashboard();
+      
+      const streakElement = await screen.findByText("10");
+      expect(streakElement).toHaveClass("text-green-500");
+    });
+
+    it("includes tooltip with streak explanation", async () => {
+      mockInvoke.mockResolvedValue({
+        success: true,
+        data: {
+          date: "2025-11-02",
+          secondsInGreen: 0,
+          secondsInYellow: 0,
+          secondsInRed: 0,
+          avgScore: 75,
+          sampleCount: 100,
+          streak: 5,
+        },
+      });
+
+      renderDashboard();
+      
+      const streakElement = await screen.findByText("5");
+      expect(streakElement).toHaveAttribute("title", "Consecutive days with score ≥ 70%");
+    });
   });
 });
