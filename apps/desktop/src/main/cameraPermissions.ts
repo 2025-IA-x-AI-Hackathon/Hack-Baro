@@ -46,6 +46,10 @@ export const openCameraSettings =
           'x-apple.systempreferences:com.apple.preference.security?Privacy_Camera';
       } else if (process.platform === 'win32') {
         targetUrl = 'ms-settings:privacy-webcam';
+      } else if (process.platform === 'linux') {
+        // Try GNOME Control Center (most common on Linux desktop environments)
+        // Falls back to generic privacy settings if camera-specific panel unavailable
+        targetUrl = 'gnome-control-center://camera';
       }
 
       if (!targetUrl) {
