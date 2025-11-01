@@ -1,4 +1,4 @@
-export type DetectorKind = 'mediapipe' | 'onnx';
+export type DetectorKind = "mediapipe" | "onnx";
 
 export type DetectorInitPayload = {
   kind: DetectorKind;
