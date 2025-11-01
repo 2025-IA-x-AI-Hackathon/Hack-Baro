@@ -1,8 +1,8 @@
 /* eslint-disable no-console */
 // Console output is intentional here to mirror structured logs locally while shipping them to Better Stack.
-import { monitoringConfig } from './config/monitoring';
+import { monitoringConfig } from "./config/monitoring";
 
-export type LoggerProcessType = 'main' | 'renderer' | 'worker';
+export type LoggerProcessType = "main" | "renderer" | "worker";
 
 export type LoggerMetadata = Record<string, unknown>;
 
@@ -11,18 +11,18 @@ type LoggerOptions = {
   processType: LoggerProcessType;
 };
 
-const createLogtailAdapter = (client: unknown, mode: 'browser' | 'node') => {
+const createLogtailAdapter = (client: unknown, mode: "browser" | "node") => {
   const logtailClient = client as {
     log?: unknown;
     flush?: unknown;
   };
 
   const log = async (message: string, metadata?: LoggerMetadata) => {
-    if (typeof logtailClient.log !== 'function') {
+    if (typeof logtailClient.log !== "function") {
       return;
     }
 
-    if (mode === 'browser') {
+    if (mode === "browser") {
       await Reflect.apply(logtailClient.log, logtailClient, [
         message,
         undefined,
@@ -35,7 +35,7 @@ const createLogtailAdapter = (client: unknown, mode: 'browser' | 'node') => {
   };
 
   const flush =
-    typeof logtailClient.flush === 'function'
+    typeof logtailClient.flush === "function"
       ? async () => {
           await Reflect.apply(
             logtailClient.flush as () => Promise<void>,
@@ -77,19 +77,19 @@ const loadLogtail = async (
 
   const instancePromise = (async () => {
     try {
-      if (processType === 'renderer') {
-        const { Logtail } = await import('@logtail/browser');
+      if (processType === "renderer") {
+        const { Logtail } = await import("@logtail/browser");
         const client = new Logtail(monitoringConfig.logtail.token);
-        return createLogtailAdapter(client, 'browser');
+        return createLogtailAdapter(client, "browser");
       }
 
       const { Logtail } = await import(
-        /* webpackIgnore: true */ '@logtail/node'
+        /* webpackIgnore: true */ "@logtail/node"
       );
       const client = new Logtail(monitoringConfig.logtail.token);
-      return createLogtailAdapter(client, 'node');
+      return createLogtailAdapter(client, "node");
     } catch (error) {
-      console.error('Failed to initialise Better Stack Logtail client', error);
+      console.error("Failed to initialise Better Stack Logtail client", error);
       return null;
     }
   })();
@@ -123,7 +123,7 @@ const emitLogtail = async (
 
     await instance.log(message, metadata);
   } catch (error) {
-    console.error('Failed to send log to Better Stack', error);
+    console.error("Failed to send log to Better Stack", error);
   }
 };
 
@@ -158,11 +158,11 @@ const createEmitter =
   };
 
 export const createLogger = (options: LoggerOptions) => {
-  const debug = createEmitter(options, 'debug');
-  const info = createEmitter(options, 'info');
-  const warn = createEmitter(options, 'warn');
-  const error = createEmitter(options, 'error');
-  const fatal = createEmitter(options, 'fatal');
+  const debug = createEmitter(options, "debug");
+  const info = createEmitter(options, "info");
+  const warn = createEmitter(options, "warn");
+  const error = createEmitter(options, "error");
+  const fatal = createEmitter(options, "fatal");
 
   const flush = async () => {
     const instance = await loadLogtail(options.processType);

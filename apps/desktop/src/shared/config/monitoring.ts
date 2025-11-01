@@ -4,7 +4,7 @@ type RuntimeEnv = Record<string, string | undefined>;
 export type SanitizableSentryEvent = Record<string, unknown>;
 
 const getWindowEnv = (): RuntimeEnv | undefined => {
-  if (typeof window === 'undefined') {
+  if (typeof window === "undefined") {
     return undefined;
   }
 
@@ -16,7 +16,7 @@ const getWindowEnv = (): RuntimeEnv | undefined => {
 };
 
 const getProcessEnv = (): RuntimeEnv | undefined => {
-  if (typeof globalThis === 'undefined') {
+  if (typeof globalThis === "undefined") {
     return undefined;
   }
 
@@ -34,12 +34,12 @@ const resolveEnvironment = (env: RuntimeEnv): Environment => {
     return explicitEnv;
   }
 
-  const nodeEnv = env.NODE_ENV ?? 'development';
+  const nodeEnv = env.NODE_ENV ?? "development";
   if (nodeEnv && nodeEnv.trim().length > 0) {
     return nodeEnv;
   }
 
-  return 'development';
+  return "development";
 };
 
 const normalizeBoolean = (value: string | undefined, fallback = false) => {
@@ -48,15 +48,15 @@ const normalizeBoolean = (value: string | undefined, fallback = false) => {
   }
 
   switch (value.toLowerCase()) {
-    case '1':
-    case 'true':
-    case 'yes':
-    case 'on':
+    case "1":
+    case "true":
+    case "yes":
+    case "on":
       return true;
-    case '0':
-    case 'false':
-    case 'no':
-    case 'off':
+    case "0":
+    case "false":
+    case "no":
+    case "off":
       return false;
     default:
       return fallback;
@@ -64,25 +64,25 @@ const normalizeBoolean = (value: string | undefined, fallback = false) => {
 };
 
 const SENSITIVE_KEYS = [
-  'password',
-  'token',
-  'secret',
-  'authorization',
-  'auth',
-  'ssn',
-  'email',
-  'phone',
+  "password",
+  "token",
+  "secret",
+  "authorization",
+  "auth",
+  "ssn",
+  "email",
+  "phone",
 ];
 
 const stringifyUserId = (value: unknown): string => {
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     return value;
   }
 
   if (
-    typeof value === 'number' ||
-    typeof value === 'boolean' ||
-    typeof value === 'bigint'
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    typeof value === "bigint"
   ) {
     return String(value);
   }
@@ -90,7 +90,7 @@ const stringifyUserId = (value: unknown): string => {
   try {
     return JSON.stringify(value);
   } catch {
-    return '[unserializable-user-id]';
+    return "[unserializable-user-id]";
   }
 };
 
@@ -103,7 +103,7 @@ const scrubValue = (value: unknown): unknown => {
     return value.map((item) => scrubValue(item));
   }
 
-  if (typeof value === 'object') {
+  if (typeof value === "object") {
     const result: Record<string, unknown> = {};
 
     Object.entries(value as Record<string, unknown>).forEach(
@@ -112,7 +112,7 @@ const scrubValue = (value: unknown): unknown => {
         if (
           SENSITIVE_KEYS.some((sensitiveKey) => lowerKey.includes(sensitiveKey))
         ) {
-          result[key] = '[redacted]';
+          result[key] = "[redacted]";
           return;
         }
 
@@ -123,13 +123,13 @@ const scrubValue = (value: unknown): unknown => {
     return result;
   }
 
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     if (
       SENSITIVE_KEYS.some((sensitiveKey) =>
         value.toLowerCase().includes(sensitiveKey),
       )
     ) {
-      return '[redacted]';
+      return "[redacted]";
     }
   }
 
@@ -137,7 +137,7 @@ const scrubValue = (value: unknown): unknown => {
 };
 
 const sanitizeSentryEvent = (event: unknown): unknown => {
-  if (event === null || typeof event !== 'object' || Array.isArray(event)) {
+  if (event === null || typeof event !== "object" || Array.isArray(event)) {
     return event;
   }
 
@@ -147,11 +147,11 @@ const sanitizeSentryEvent = (event: unknown): unknown => {
   if (Array.isArray(rawBreadcrumbs)) {
     eventRecord.breadcrumbs = rawBreadcrumbs
       .filter((breadcrumb): breadcrumb is Record<string, unknown> => {
-        return typeof breadcrumb === 'object' && breadcrumb !== null;
+        return typeof breadcrumb === "object" && breadcrumb !== null;
       })
       .map((breadcrumb) => {
         const breadcrumbRecord = { ...breadcrumb };
-        if ('data' in breadcrumbRecord) {
+        if ("data" in breadcrumbRecord) {
           breadcrumbRecord.data = scrubValue(breadcrumbRecord.data);
         }
         return breadcrumbRecord;
@@ -161,21 +161,21 @@ const sanitizeSentryEvent = (event: unknown): unknown => {
   eventRecord.request = undefined;
 
   const rawExtra = eventRecord.extra;
-  if (rawExtra && typeof rawExtra === 'object' && !Array.isArray(rawExtra)) {
+  if (rawExtra && typeof rawExtra === "object" && !Array.isArray(rawExtra)) {
     eventRecord.extra = scrubValue(rawExtra);
   }
 
   const rawContexts = eventRecord.contexts;
   if (
     rawContexts &&
-    typeof rawContexts === 'object' &&
+    typeof rawContexts === "object" &&
     !Array.isArray(rawContexts)
   ) {
     eventRecord.contexts = scrubValue(rawContexts);
   }
 
   const rawUser = eventRecord.user;
-  if (rawUser && typeof rawUser === 'object' && !Array.isArray(rawUser)) {
+  if (rawUser && typeof rawUser === "object" && !Array.isArray(rawUser)) {
     const userRecord = rawUser as Record<string, unknown>;
     const userId = userRecord.id;
     if (userId != null) {
@@ -209,15 +209,15 @@ const runtimeEnv = getWindowEnv() ?? getProcessEnv() ?? {};
 
 const environment = resolveEnvironment(runtimeEnv);
 const isProductionLike =
-  environment === 'production' || environment === 'staging';
+  environment === "production" || environment === "staging";
 
-const sentryDsn = runtimeEnv.SENTRY_DSN ?? '';
+const sentryDsn = runtimeEnv.SENTRY_DSN ?? "";
 const sentryEnabled =
   Boolean(sentryDsn) &&
   (isProductionLike ||
     normalizeBoolean(runtimeEnv.ENABLE_SENTRY_IN_DEV, false));
 
-const logtailToken = runtimeEnv.BETTER_STACK_TOKEN ?? '';
+const logtailToken = runtimeEnv.BETTER_STACK_TOKEN ?? "";
 const logtailEnabled =
   Boolean(logtailToken) &&
   (isProductionLike ||
@@ -235,7 +235,7 @@ export const monitoringConfig: MonitoringConfig = {
     ),
     tracesSampleRate: (() => {
       const rawValue = runtimeEnv.SENTRY_TRACES_SAMPLE_RATE;
-      const parsedValue = parseFloat(rawValue ?? '0.1');
+      const parsedValue = parseFloat(rawValue ?? "0.1");
       return Number.isNaN(parsedValue) ? 0.1 : parsedValue;
     })(),
     beforeSend: sanitizeSentryEvent,

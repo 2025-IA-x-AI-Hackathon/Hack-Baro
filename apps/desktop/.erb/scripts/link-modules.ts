@@ -1,5 +1,5 @@
-import fs from 'fs';
-import webpackPathsRaw from '../configs/webpack.paths.js';
+import fs from "fs";
+import webpackPathsRaw from "../configs/webpack.paths.js";
 
 type NodeModulesPaths = {
   srcNodeModulesPath: string;
@@ -12,9 +12,9 @@ const { srcNodeModulesPath, appNodeModulesPath, erbNodeModulesPath } =
 
 if (fs.existsSync(appNodeModulesPath)) {
   if (!fs.existsSync(srcNodeModulesPath)) {
-    fs.symlinkSync(appNodeModulesPath, srcNodeModulesPath, 'junction');
+    fs.symlinkSync(appNodeModulesPath, srcNodeModulesPath, "junction");
   }
   if (!fs.existsSync(erbNodeModulesPath)) {
-    fs.symlinkSync(appNodeModulesPath, erbNodeModulesPath, 'junction');
+    fs.symlinkSync(appNodeModulesPath, erbNodeModulesPath, "junction");
   }
 }

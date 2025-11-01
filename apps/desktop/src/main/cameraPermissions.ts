@@ -1,6 +1,6 @@
-import { shell, systemPreferences } from 'electron';
-import { captureException } from './sentry';
-import { getLogger } from '../shared/logger';
+import { shell, systemPreferences } from "electron";
+import { getLogger } from "../shared/logger";
+import { captureException } from "./sentry";
 
 export type CameraPermissionResult = {
   granted: boolean;
@@ -12,7 +12,7 @@ export type OpenCameraSettingsResult = {
   error?: string;
 };
 
-const logger = getLogger('camera-permissions', 'main');
+const logger = getLogger("camera-permissions", "main");
 
 const toErrorPayload = (error: unknown) => ({
   error: error instanceof Error ? error.message : String(error),
@@ -22,16 +22,16 @@ const toErrorPayload = (error: unknown) => ({
 export const requestCameraPermission =
   async (): Promise<CameraPermissionResult> => {
     try {
-      if (process.platform === 'darwin') {
-        const granted = await systemPreferences.askForMediaAccess('camera');
+      if (process.platform === "darwin") {
+        const granted = await systemPreferences.askForMediaAccess("camera");
         return { granted };
       }
 
       return { granted: true };
     } catch (error: unknown) {
       const payload = toErrorPayload(error);
-      logger.error('Failed to request camera permission', payload);
-      captureException(error, { scope: 'camera:request' });
+      logger.error("Failed to request camera permission", payload);
+      captureException(error, { scope: "camera:request" });
       return { granted: false, error: payload.error };
     }
   };
@@ -41,15 +41,15 @@ export const openCameraSettings =
     try {
       let targetUrl: string | undefined;
 
-      if (process.platform === 'darwin') {
+      if (process.platform === "darwin") {
         targetUrl =
-          'x-apple.systempreferences:com.apple.preference.security?Privacy_Camera';
-      } else if (process.platform === 'win32') {
-        targetUrl = 'ms-settings:privacy-webcam';
-      } else if (process.platform === 'linux') {
+          "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera";
+      } else if (process.platform === "win32") {
+        targetUrl = "ms-settings:privacy-webcam";
+      } else if (process.platform === "linux") {
         // Try GNOME Control Center (most common on Linux desktop environments)
         // Falls back to generic privacy settings if camera-specific panel unavailable
-        targetUrl = 'gnome-control-center://camera';
+        targetUrl = "gnome-control-center://camera";
       }
 
       if (!targetUrl) {
@@ -63,8 +63,8 @@ export const openCameraSettings =
       return { success: true };
     } catch (error: unknown) {
       const payload = toErrorPayload(error);
-      logger.error('Failed to open system settings for camera access', payload);
-      captureException(error, { scope: 'camera:open-settings' });
+      logger.error("Failed to open system settings for camera access", payload);
+      captureException(error, { scope: "camera:open-settings" });
       return { success: false, error: payload.error };
     }
   };

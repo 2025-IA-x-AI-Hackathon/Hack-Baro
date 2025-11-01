@@ -1,7 +1,7 @@
 // Disable no-unused-vars, broken for spread args
 /* eslint no-unused-vars: off */
-import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
-import { IPC_CHANNELS, type RendererChannel } from '../shared/ipcChannels';
+import { IpcRendererEvent, contextBridge, ipcRenderer } from "electron";
+import { IPC_CHANNELS, type RendererChannel } from "../shared/ipcChannels";
 
 const validChannels = new Set<RendererChannel>(Object.values(IPC_CHANNELS));
 
@@ -47,10 +47,11 @@ export const electronHandler = {
     SENTRY_TRACES_SAMPLE_RATE: process.env.SENTRY_TRACES_SAMPLE_RATE,
     BETTER_STACK_TOKEN: process.env.BETTER_STACK_TOKEN,
     ENABLE_BETTER_STACK_IN_DEV: process.env.ENABLE_BETTER_STACK_IN_DEV,
+    POSELY_DETECTOR: process.env.POSELY_DETECTOR,
     npm_package_version: process.env.npm_package_version,
   },
 };
 
-contextBridge.exposeInMainWorld('electron', electronHandler);
+contextBridge.exposeInMainWorld("electron", electronHandler);
 
 export type ElectronHandler = typeof electronHandler;

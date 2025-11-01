@@ -1,19 +1,19 @@
-import { parentPort } from 'node:worker_threads';
-import './sentry';
-import { WORKER_MESSAGES, type WorkerMessage } from '../shared/ipcChannels';
-import { getLogger } from '../shared/logger';
+import { parentPort } from "node:worker_threads";
+import { WORKER_MESSAGES, type WorkerMessage } from "../shared/ipcChannels";
+import { getLogger } from "../shared/logger";
+import "./sentry";
 
 const port = parentPort;
 
 if (!port) {
-  throw new Error('Worker must be spawned from the Electron main process.');
+  throw new Error("Worker must be spawned from the Electron main process.");
 }
 
 const postMessage = (message: WorkerMessage) => {
   port.postMessage(message);
 };
 
-const logger = getLogger('worker-runtime', 'worker');
+const logger = getLogger("worker-runtime", "worker");
 
 postMessage({
   type: WORKER_MESSAGES.ready,
@@ -22,7 +22,7 @@ postMessage({
   },
 });
 
-port.on('message', (message: WorkerMessage) => {
+port.on("message", (message: WorkerMessage) => {
   switch (message.type) {
     case WORKER_MESSAGES.ping: {
       postMessage({
@@ -34,7 +34,7 @@ port.on('message', (message: WorkerMessage) => {
       break;
     }
     case WORKER_MESSAGES.TRIGGER_WORKER_ERROR: {
-      throw new Error('Intentional Worker Error');
+      throw new Error("Intentional Worker Error");
     }
     default: {
       postMessage({
@@ -44,7 +44,7 @@ port.on('message', (message: WorkerMessage) => {
           observedAt: new Date().toISOString(),
         },
       });
-      logger.warn('Worker received unknown message', {
+      logger.warn("Worker received unknown message", {
         messageType: message.type,
       });
       break;

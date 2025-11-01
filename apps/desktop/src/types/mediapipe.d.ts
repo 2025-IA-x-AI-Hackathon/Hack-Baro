@@ -1,6 +1,6 @@
-declare module '@mediapipe/tasks-vision' {
+declare module "@mediapipe/tasks-vision" {
   type FilesetResolver = {
-    readonly __brand?: 'FilesetResolver';
+    readonly __brand?: "FilesetResolver";
   };
 
   interface FilesetResolverStatic {
@@ -15,12 +15,12 @@ declare module '@mediapipe/tasks-vision' {
     baseOptions: {
       modelAssetPath: string;
     };
-    runningMode: 'IMAGE' | 'VIDEO';
+    runningMode: "IMAGE" | "VIDEO";
     numPoses?: number;
   };
 
   type PoseLandmarkerResult = {
-    readonly __brand?: 'PoseLandmarkerResult';
+    readonly __brand?: "PoseLandmarkerResult";
   };
 
   interface PoseLandmarker {

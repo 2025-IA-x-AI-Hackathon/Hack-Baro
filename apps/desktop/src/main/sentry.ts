@@ -1,17 +1,17 @@
-import * as Sentry from '@sentry/electron/main';
-import type { Breadcrumb, ElectronMainOptions } from '@sentry/electron/main';
-import { app } from 'electron';
-import { monitoringConfig } from '../shared/config/monitoring';
-import { getLogger } from '../shared/logger';
+import * as Sentry from "@sentry/electron/main";
+import type { Breadcrumb, ElectronMainOptions } from "@sentry/electron/main";
+import { app } from "electron";
+import { monitoringConfig } from "../shared/config/monitoring";
+import { getLogger } from "../shared/logger";
 
-const logger = getLogger('sentry-main', 'main');
+const logger = getLogger("sentry-main", "main");
 
-let isInitialised = false;
+let isinitialized = false;
 
 const buildDefaultBreadcrumb = (message: string): Breadcrumb => ({
   timestamp: Date.now() / 1000,
-  level: 'info' as Breadcrumb['level'],
-  category: 'application',
+  level: "info" as Breadcrumb["level"],
+  category: "application",
   message,
 });
 
@@ -19,7 +19,7 @@ export const captureException = (
   error: unknown,
   context?: Record<string, unknown>,
 ) => {
-  if (!isInitialised || !monitoringConfig.sentry.enabled) {
+  if (!isinitialized || !monitoringConfig.sentry.enabled) {
     return;
   }
 
@@ -29,7 +29,7 @@ export const captureException = (
 };
 
 export const captureMessage = (message: string) => {
-  if (!isInitialised || !monitoringConfig.sentry.enabled) {
+  if (!isinitialized || !monitoringConfig.sentry.enabled) {
     return;
   }
 
@@ -37,25 +37,25 @@ export const captureMessage = (message: string) => {
 };
 
 const resolveReasonMessage = (reason: unknown): string => {
-  if (reason instanceof Error && typeof reason.message === 'string') {
+  if (reason instanceof Error && typeof reason.message === "string") {
     return reason.message;
   }
 
-  if (typeof reason === 'string') {
+  if (typeof reason === "string") {
     return reason;
   }
 
   try {
     return JSON.stringify(reason);
   } catch {
-    return 'unknown';
+    return "unknown";
   }
 };
 
 const initSentry = () => {
-  if (!monitoringConfig.sentry.enabled || isInitialised) {
+  if (!monitoringConfig.sentry.enabled || isinitialized) {
     if (!monitoringConfig.sentry.enabled) {
-      logger.debug('Skipping Sentry initialisation: disabled by configuration');
+      logger.debug("Skipping Sentry initialisation: disabled by configuration");
     }
     return;
   }
@@ -65,7 +65,7 @@ const initSentry = () => {
     environment: monitoringConfig.environment,
     release: monitoringConfig.release,
     beforeSend: monitoringConfig.sentry.beforeSend as NonNullable<
-      ElectronMainOptions['beforeSend']
+      ElectronMainOptions["beforeSend"]
     >,
     tracesSampleRate: monitoringConfig.sentry.tracesSampleRate,
     integrations: [],
@@ -73,8 +73,8 @@ const initSentry = () => {
 
   const scope = Sentry.getCurrentScope?.();
   if (scope) {
-    scope.setTag?.('process', 'main');
-    scope.setContext?.('application', {
+    scope.setTag?.("process", "main");
+    scope.setContext?.("application", {
       version: app.getVersion(),
       locale: app.getLocale(),
       name: app.getName(),
@@ -82,25 +82,25 @@ const initSentry = () => {
   }
 
   Sentry.addBreadcrumb(
-    buildDefaultBreadcrumb('Sentry initialised for Electron main process'),
+    buildDefaultBreadcrumb("Sentry initialised for Electron main process"),
   );
 
-  isInitialised = true;
+  isinitialized = true;
 
-  process.on('uncaughtException', (error) => {
-    logger.fatal('Uncaught exception in main process', {
+  process.on("uncaughtException", (error) => {
+    logger.fatal("Uncaught exception in main process", {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     });
     captureException(error);
   });
 
-  process.on('unhandledRejection', (reason) => {
+  process.on("unhandledRejection", (reason) => {
     const error =
       reason instanceof Error
         ? reason
         : new Error(resolveReasonMessage(reason));
-    logger.fatal('Unhandled promise rejection in main process', {
+    logger.fatal("Unhandled promise rejection in main process", {
       error: error.message,
       stack: error.stack,
     });

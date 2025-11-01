@@ -1,6 +1,6 @@
 /* eslint-disable import/prefer-default-export */
-import { useState } from 'react';
-import { Button, Card, Input } from '@heroui/react';
+import { Button, Card, Input } from "@heroui/react";
+import { useState } from "react";
 
 type ExampleHeroUIProps = {
   onPingMain: () => void;
@@ -11,15 +11,15 @@ export function ExampleHeroUI({
   onPingMain,
   onPingWorker,
 }: ExampleHeroUIProps) {
-  const [name, setName] = useState('');
+  const [name, setName] = useState("");
 
   return (
     <div className="mt-6 grid gap-4 md:grid-cols-2">
       <Card className="p-6" radius="lg" shadow="sm">
-        <h2 className="text-xl font-semibold text-foreground">
+        <h2 className="text-foreground text-xl font-semibold">
           HeroUI Playground
         </h2>
-        <p className="mt-1 text-sm text-default-500">
+        <p className="text-default-500 mt-1 text-sm">
           These components are imported directly from HeroUI.
         </p>
         <div className="mt-4 flex flex-col gap-3">
@@ -30,7 +30,7 @@ export function ExampleHeroUI({
             onValueChange={setName}
             variant="bordered"
             classNames={{
-              label: 'font-medium text-default-600',
+              label: "font-medium text-default-600",
             }}
           />
           <div className="flex flex-wrap gap-3">
@@ -44,7 +44,7 @@ export function ExampleHeroUI({
               color="success"
               variant="flat"
               isDisabled={!name.length}
-              onPress={() => setName('')}
+              onPress={() => setName("")}
             >
               Clear Name
             </Button>
@@ -52,23 +52,23 @@ export function ExampleHeroUI({
         </div>
       </Card>
       <Card className="p-6 md:h-full" radius="lg" shadow="sm">
-        <h2 className="text-xl font-semibold text-foreground">
+        <h2 className="text-foreground text-xl font-semibold">
           Current Settings
         </h2>
-        <dl className="mt-4 space-y-2 text-sm text-default-600">
+        <dl className="text-default-600 mt-4 space-y-2 text-sm">
           <div className="flex justify-between">
             <dt>Developer</dt>
-            <dd className="font-medium text-foreground">
-              {name || 'Anonymous'}
+            <dd className="text-foreground font-medium">
+              {name || "Anonymous"}
             </dd>
           </div>
           <div className="flex justify-between">
             <dt>HeroUI Loaded</dt>
-            <dd className="font-medium text-success">Yes</dd>
+            <dd className="text-success font-medium">Yes</dd>
           </div>
           <div className="flex justify-between">
             <dt>Actions</dt>
-            <dd className="font-medium text-default-500">
+            <dd className="text-default-500 font-medium">
               Ping main or worker to send messages
             </dd>
           </div>

@@ -1,15 +1,15 @@
-const path = require('node:path');
-const { _electron: electron, expect, test } = require('@playwright/test');
+const path = require("node:path");
+const { _electron: electron, expect, test } = require("@playwright/test");
 
-const projectRoot = path.resolve(__dirname, '..');
+const projectRoot = path.resolve(__dirname, "..");
 
-test.describe('Electron app smoke test', () => {
-  test('launches harness window and handles IPC round trips', async () => {
+test.describe("Electron app smoke test", () => {
+  test("launches harness window and handles IPC round trips", async () => {
     const electronApp = await electron.launch({
-      args: [path.join(__dirname, 'fixtures/test-main.js')],
+      args: [path.join(__dirname, "fixtures/test-main.js")],
       cwd: projectRoot,
       env: {
-        NODE_ENV: 'test',
+        NODE_ENV: "test",
       },
     });
 
@@ -25,10 +25,10 @@ test.describe('Electron app smoke test', () => {
       );
       expect(scriptReady).toBe(true);
 
-      await expect(window).toHaveTitle('Posely E2E Harness');
+      await expect(window).toHaveTitle("Posely E2E Harness");
       await expect(
         window.locator('[data-testid="app-description"]'),
-      ).toContainText('IPC communication');
+      ).toContainText("IPC communication");
 
       const pingMainButton = window.locator('[data-testid="ping-main"]');
       await expect(pingMainButton).toBeVisible();
@@ -38,10 +38,10 @@ test.describe('Electron app smoke test', () => {
       const lastPing = await electronApp.evaluate(
         () => globalThis.__e2eLastPing ?? null,
       );
-      expect(lastPing).toBe('ping');
+      expect(lastPing).toBe("ping");
 
       await expect(window.locator('[data-testid="main-response"]')).toHaveText(
-        'pong:ping',
+        "pong:ping",
       );
 
       const pingWorkerButton = window.locator('[data-testid="ping-worker"]');
@@ -59,7 +59,7 @@ test.describe('Electron app smoke test', () => {
       );
       await expect(
         window.locator('[data-testid="worker-response"]'),
-      ).toHaveText('worker:ready');
+      ).toHaveText("worker:ready");
     } finally {
       await electronApp.close();
     }

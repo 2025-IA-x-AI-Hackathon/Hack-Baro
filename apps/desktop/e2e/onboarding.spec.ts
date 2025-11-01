@@ -1,23 +1,23 @@
 /* eslint-disable import/no-extraneous-dependencies */
-import { _electron as electron, expect, test } from '@playwright/test';
-import type { ElectronApplication, Page } from '@playwright/test';
+import { _electron as electron, expect, test } from "@playwright/test";
+import type { ElectronApplication, Page } from "@playwright/test";
 // eslint-disable-next-line import/no-unresolved, import/extensions
-import { IPC_CHANNELS } from '../src/shared/ipcChannels';
+import { IPC_CHANNELS } from "../src/shared/ipcChannels";
 
 let electronApp: ElectronApplication;
 let onboardingWindow: Page;
 
 test.beforeEach(async () => {
-  electronApp = await electron.launch({ args: ['.'] });
+  electronApp = await electron.launch({ args: ["."] });
   onboardingWindow = await electronApp.firstWindow();
-  await onboardingWindow.waitForLoadState('domcontentloaded');
+  await onboardingWindow.waitForLoadState("domcontentloaded");
 });
 
 test.afterEach(async () => {
   await electronApp.close();
 });
 
-test('Onboarding - Deny Path', async () => {
+test("Onboarding - Deny Path", async () => {
   const window = onboardingWindow;
 
   await electronApp.evaluate(({ ipcMain }, channel) => {
@@ -37,12 +37,12 @@ test('Onboarding - Deny Path', async () => {
 
   await expect(
     window.locator(
-      'text=Camera access was denied. You can enable it via system settings to continue.',
+      "text=Camera access was denied. You can enable it via system settings to continue.",
     ),
   ).toBeVisible();
 });
 
-test('Onboarding - Allow Path', async () => {
+test("Onboarding - Allow Path", async () => {
   const window = onboardingWindow;
 
   await electronApp.evaluate(({ ipcMain }, channel) => {
@@ -57,6 +57,6 @@ test('Onboarding - Allow Path', async () => {
   await window.locator('button:has-text("Next")').click();
 
   await expect(
-    window.locator('text=Thank you! Camera access is enabled.'),
+    window.locator("text=Thank you! Camera access is enabled."),
   ).toBeVisible();
 });

@@ -1,6 +1,5 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react';
-
-import { captureRendererException } from '../sentry';
+import { Component, type ErrorInfo, type ReactNode } from "react";
+import { captureRendererException } from "../sentry";
 
 type SentryErrorBoundaryProps = {
   children: ReactNode;
@@ -32,10 +31,10 @@ class SentryErrorBoundary extends Component<
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     captureRendererException(error);
 
-    if (process.env.NODE_ENV !== 'production') {
+    if (process.env.NODE_ENV !== "production") {
       // eslint-disable-next-line no-console -- Helpful during development to see the component stack.
       console.error(
-        'Renderer error boundary caught an error',
+        "Renderer error boundary caught an error",
         error,
         errorInfo,
       );

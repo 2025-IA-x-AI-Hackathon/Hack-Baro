@@ -1,24 +1,24 @@
-import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
-import { MEDIAPIPE_ASSETS } from '../../shared/detection/mediapipeAssets.mjs';
+import { FilesetResolver, PoseLandmarker } from "@mediapipe/tasks-vision";
+import { MEDIAPIPE_ASSETS } from "../../shared/detection/mediapipeAssets.mjs";
 import type {
   Detector,
   DetectorInitPayload,
   DetectorResult,
   FrameMetadata,
-} from '../../shared/types/detector';
+} from "../../shared/types/detector";
 
 type PoseLandmarkerInstance = Pick<
   Awaited<ReturnType<typeof PoseLandmarker.createFromOptions>>,
-  'detect' | 'close'
+  "detect" | "close"
 >;
 
 const bitmapToImageData = (bitmap: ImageBitmap) => {
   const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-  const context = canvas.getContext('2d');
+  const context = canvas.getContext("2d");
 
   if (!context) {
     throw new Error(
-      'Unable to get context to convert ImageBitmap to ImageData',
+      "Unable to get context to convert ImageBitmap to ImageData",
     );
   }
 
@@ -27,7 +27,7 @@ const bitmapToImageData = (bitmap: ImageBitmap) => {
 };
 
 export class MediapipeDetector implements Detector {
-  readonly name = 'MediapipeDetector';
+  readonly name = "MediapipeDetector";
 
   private landmarker: PoseLandmarkerInstance | null = null;
 
@@ -43,7 +43,7 @@ export class MediapipeDetector implements Detector {
       baseOptions: {
         modelAssetPath,
       },
-      runningMode: 'IMAGE',
+      runningMode: "IMAGE",
       numPoses: 1,
     });
 
@@ -55,7 +55,7 @@ export class MediapipeDetector implements Detector {
     metadata: FrameMetadata,
   ): Promise<DetectorResult> {
     if (!this.landmarker) {
-      throw new Error('MediapipeDetector is not initialised');
+      throw new Error("MediapipeDetector is not initialized");
     }
 
     const inferenceStart = performance.now();

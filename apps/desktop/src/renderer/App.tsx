@@ -1,25 +1,24 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
-  HeroUIProvider,
   Button,
   Card,
   CardBody,
   CardFooter,
   CardHeader,
   Code,
+  HeroUIProvider,
   Link,
-} from '@heroui/react';
+} from "@heroui/react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import icon from "../../assets/icon.svg";
+import { IPC_CHANNELS } from "../shared/ipcChannels";
+import { getLogger } from "../shared/logger";
+import { ExampleHeroUI } from "./components/ExampleHeroUI";
+import { LanguageSwitcher } from "./components/LanguageSwitcher";
+import { OnboardingWizard } from "./components/onboarding/OnboardingWizard";
+import "./styles/globals.css";
 
-import icon from '../../assets/icon.svg';
-import './styles/globals.css';
-import { IPC_CHANNELS } from '../shared/ipcChannels';
-import { getLogger } from '../shared/logger';
-import { ExampleHeroUI } from './components/ExampleHeroUI';
-import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
-import { LanguageSwitcher } from './components/LanguageSwitcher';
-
-type ElectronApi = Window['electron'];
+type ElectronApi = Window["electron"];
 
 type IpcArgs = unknown[];
 
@@ -28,19 +27,19 @@ type MessageState = {
   isDefault: boolean;
 };
 
-const logger = getLogger('renderer-app', 'renderer');
+const logger = getLogger("renderer-app", "renderer");
 
 const formatPayload = (payload: unknown): string => {
   if (payload === undefined) {
-    return 'undefined';
+    return "undefined";
   }
   if (payload === null) {
-    return 'null';
+    return "null";
   }
-  if (typeof payload === 'string') {
+  if (typeof payload === "string") {
     return payload;
   }
-  if (typeof payload === 'object') {
+  if (typeof payload === "object") {
     try {
       return JSON.stringify(payload, null, 2);
     } catch {
@@ -49,19 +48,19 @@ const formatPayload = (payload: unknown): string => {
   }
 
   if (
-    typeof payload === 'number' ||
-    typeof payload === 'boolean' ||
-    typeof payload === 'bigint'
+    typeof payload === "number" ||
+    typeof payload === "boolean" ||
+    typeof payload === "bigint"
   ) {
     return String(payload);
   }
 
-  if (typeof payload === 'symbol') {
-    return payload.description ? `Symbol(${payload.description})` : 'Symbol()';
+  if (typeof payload === "symbol") {
+    return payload.description ? `Symbol(${payload.description})` : "Symbol()";
   }
 
-  if (typeof payload === 'function') {
-    return `Function(${payload.name ?? 'anonymous'})`;
+  if (typeof payload === "function") {
+    return `Function(${payload.name ?? "anonymous"})`;
   }
 
   return Object.prototype.toString.call(payload);
@@ -78,28 +77,28 @@ const markAsCustom = (value: string): MessageState => ({
 });
 
 function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
-  const { t } = useTranslation(['common']);
+  const { t } = useTranslation(["common"]);
   const channels = useMemo(() => electron.channels ?? IPC_CHANNELS, [electron]);
   const { ipcRenderer } = electron;
 
   const defaults = useMemo(
     () => ({
-      waitingForPing: t('status.waitingForPing'),
-      waitingForWorker: t('status.waitingForWorker'),
-      workerBooting: t('status.workerBooting'),
-      noWorkerResponse: t('status.noWorkerResponse'),
-      noPayload: t('status.noPayload'),
-      mainProcess: t('status.mainProcess'),
-      workerStatus: t('status.workerStatus'),
-      workerResponse: t('status.workerResponse'),
-      title: t('app.title'),
-      tagline: t('app.tagline'),
-      pingMain: t('actions.pingMain'),
-      pingWorker: t('actions.pingWorker'),
-      documentationTitle: t('cards.documentation.title'),
-      documentationBody: t('cards.documentation.body'),
-      turborepoTitle: t('cards.turborepo.title'),
-      turborepoBody: t('cards.turborepo.body'),
+      waitingForPing: t("status.waitingForPing"),
+      waitingForWorker: t("status.waitingForWorker"),
+      workerBooting: t("status.workerBooting"),
+      noWorkerResponse: t("status.noWorkerResponse"),
+      noPayload: t("status.noPayload"),
+      mainProcess: t("status.mainProcess"),
+      workerStatus: t("status.workerStatus"),
+      workerResponse: t("status.workerResponse"),
+      title: t("app.title"),
+      tagline: t("app.tagline"),
+      pingMain: t("actions.pingMain"),
+      pingWorker: t("actions.pingWorker"),
+      documentationTitle: t("cards.documentation.title"),
+      documentationBody: t("cards.documentation.body"),
+      turborepoTitle: t("cards.turborepo.title"),
+      turborepoBody: t("cards.turborepo.body"),
     }),
     [t],
   );
@@ -175,7 +174,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
 
     ipcRenderer.sendMessage(channels.workerRequest, {
       requestedAt: new Date().toISOString(),
-      reason: 'initial-status-check',
+      reason: "initial-status-check",
     });
 
     return () => {
@@ -189,7 +188,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
     setMainResponse(createDefaultState(defaults.waitingForPing));
     ipcRenderer.sendMessage(channels.rendererPing, {
       requestedAt: new Date().toISOString(),
-      source: 'renderer',
+      source: "renderer",
     });
   }, [channels.rendererPing, defaults.waitingForPing, ipcRenderer]);
 
@@ -197,7 +196,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
     setWorkerResponse(createDefaultState(defaults.waitingForWorker));
     ipcRenderer.sendMessage(channels.workerRequest, {
       requestedAt: new Date().toISOString(),
-      source: 'renderer',
+      source: "renderer",
     });
   }, [channels.workerRequest, defaults.waitingForWorker, ipcRenderer]);
 
@@ -288,7 +287,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
       <ExampleHeroUI onPingMain={sendPing} onPingWorker={pingWorker} />
 
       <section className="grid gap-4 md:grid-cols-2">
-        <Card className="bg-white/10 backdrop-blur text-left">
+        <Card className="bg-white/10 text-left backdrop-blur">
           <CardHeader className="flex items-start justify-between gap-4">
             <h3 className="text-xl font-semibold text-white">
               {defaults.documentationTitle}
@@ -309,7 +308,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
             Explore Electron React Boilerplate resources.
           </CardFooter>
         </Card>
-        <Card className="bg-white/10 backdrop-blur text-left">
+        <Card className="bg-white/10 text-left backdrop-blur">
           <CardHeader className="flex items-start justify-between gap-4">
             <h3 className="text-xl font-semibold text-white">
               {defaults.turborepoTitle}
@@ -335,7 +334,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
       <Card>
         <CardHeader>
           <h2 className="text-lg font-bold">
-            {t('cards.documentation.title')}
+            {t("cards.documentation.title")}
           </h2>
         </CardHeader>
         <CardBody>
@@ -347,7 +346,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
             target="_blank"
             aria-label="Electron"
           >
-            {t('actions.getStarted')}
+            {t("actions.getStarted")}
           </Link>
         </CardFooter>
       </Card>
@@ -355,14 +354,14 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
       <Card>
         <CardHeader>
           <h2 className="text-lg font-bold">
-            {t('cards.errorMonitoring.title', 'Error Monitoring (Live Sentry)')}
+            {t("cards.errorMonitoring.title", "Error Monitoring (Live Sentry)")}
           </h2>
         </CardHeader>
         <CardBody>
           <p>
             {t(
-              'cards.errorMonitoring.body',
-              'These actions raise real errors using your configured Sentry project. Use them to validate instrumentation across processes and clear the events afterwards.',
+              "cards.errorMonitoring.body",
+              "These actions raise real errors using your configured Sentry project. Use them to validate instrumentation across processes and clear the events afterwards.",
             )}
           </p>
         </CardBody>
@@ -370,10 +369,10 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
           <Button
             color="danger"
             onClick={() => {
-              throw new Error('Intentional Renderer Error');
+              throw new Error("Intentional Renderer Error");
             }}
           >
-            {t('actions.triggerRendererError', 'Trigger Renderer Error')}
+            {t("actions.triggerRendererError", "Trigger Renderer Error")}
           </Button>
           <Button
             color="danger"
@@ -382,7 +381,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
                 .invoke(channels.TRIGGER_MAIN_ERROR)
                 .catch((error: unknown) => {
                   logger.error(
-                    'Failed to trigger main process error from renderer',
+                    "Failed to trigger main process error from renderer",
                     {
                       error:
                         error instanceof Error ? error.message : String(error),
@@ -392,7 +391,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
                 });
             }}
           >
-            {t('actions.triggerMainError', 'Trigger Main Error')}
+            {t("actions.triggerMainError", "Trigger Main Error")}
           </Button>
           <Button
             color="danger"
@@ -400,7 +399,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
               ipcRenderer.sendMessage(channels.TRIGGER_WORKER_ERROR)
             }
           >
-            {t('actions.triggerWorkerError', 'Trigger Worker Error')}
+            {t("actions.triggerWorkerError", "Trigger Worker Error")}
           </Button>
         </CardFooter>
       </Card>
@@ -418,7 +417,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
             target="_blank"
             aria-label="Turborepo"
           >
-            {t('actions.getStarted')}
+            {t("actions.getStarted")}
           </Link>
         </CardFooter>
       </Card>
@@ -428,18 +427,18 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
 
 function Hello() {
   const { electron } = window;
-  const { t } = useTranslation(['errors', 'common']);
+  const { t } = useTranslation(["errors", "common"]);
 
   if (!electron) {
     return (
       <Card className="bg-white/10 p-10 text-center text-white backdrop-blur">
         <CardHeader className="flex flex-col gap-2 text-center">
           <h1 className="text-2xl font-semibold">
-            {t('errors:ipc.unavailableTitle')}
+            {t("errors:ipc.unavailableTitle")}
           </h1>
         </CardHeader>
         <CardBody className="text-base text-white/80">
-          {t('errors:ipc.unavailableDescription')}
+          {t("errors:ipc.unavailableDescription")}
         </CardBody>
       </Card>
     );
@@ -451,7 +450,7 @@ function Hello() {
 export default function App() {
   return (
     <HeroUIProvider>
-      <div className="min-h-screen bg-gradient-to-br from-amber-300 via-rose-500 to-indigo-700 py-12 px-4 text-white md:px-8">
+      <div className="min-h-screen bg-gradient-to-br from-amber-300 via-rose-500 to-indigo-700 px-4 py-12 text-white md:px-8">
         <div className="mx-auto w-full max-w-5xl">
           <Hello />
         </div>

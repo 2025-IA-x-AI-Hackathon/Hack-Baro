@@ -1,0 +1,7 @@
+{
+  "directories": {
+    "app": "release/app",
+    "buildResources": "assets",
+    "output": "release/build"
+  }
+}
