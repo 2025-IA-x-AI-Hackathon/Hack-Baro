@@ -51,7 +51,6 @@ import {
   createSettingsWindow,
 } from "./windows/settingsWindow";
 import {
-  closeDashboardWindow,
   createDashboardWindow,
 } from "./windows/dashboardWindow";
 
