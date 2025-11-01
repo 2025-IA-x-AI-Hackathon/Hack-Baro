@@ -87,18 +87,27 @@ describe("DailyPostureRepository", () => {
 
       const updateData = {
         date: "2025-11-02",
-        secondsInGreen: 120,
-        secondsInYellow: 45,
-        secondsInRed: 15,
-        avgScore: 82.5,
-        sampleCount: 180,
+        secondsInGreen: 60,
+        secondsInYellow: 25,
+        secondsInRed: 5,
+        avgScore: 85.0,
+        sampleCount: 90,
       };
 
-      const expectedResult = { id: 1, ...updateData };
+      // Expected result: accumulated values
+      const expectedResult = {
+        id: 1,
+        date: "2025-11-02",
+        secondsInGreen: 120, // 60 + 60
+        secondsInYellow: 45, // 20 + 25
+        secondsInRed: 15, // 10 + 5
+        avgScore: 80.0, // (75*90 + 85*90) / 180
+        sampleCount: 180, // 90 + 90
+      };
 
       // Mock existing record
       (mockDb.get as any).mockReturnValueOnce(existingData);
-      // Mock update returning the updated record
+      // Mock update returning the accumulated record
       (mockDb.get as any).mockReturnValueOnce(expectedResult);
 
       const result = upsertDailyPostureLog(updateData);
