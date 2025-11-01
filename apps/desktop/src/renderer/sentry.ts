@@ -1,16 +1,16 @@
-import * as SentryRenderer from '@sentry/electron/renderer';
-import type { BrowserOptions } from '@sentry/electron/renderer';
-import { monitoringConfig } from '../shared/config/monitoring';
-import { getLogger } from '../shared/logger';
+import * as SentryRenderer from "@sentry/electron/renderer";
+import type { BrowserOptions } from "@sentry/electron/renderer";
+import { monitoringConfig } from "../shared/config/monitoring";
+import { getLogger } from "../shared/logger";
 
-const logger = getLogger('sentry-renderer', 'renderer');
+const logger = getLogger("sentry-renderer", "renderer");
 
 let rendererInitialised = false;
 
 export const initRendererSentry = () => {
   if (!monitoringConfig.sentry.enabled || rendererInitialised) {
     if (!monitoringConfig.sentry.enabled) {
-      logger.debug('Renderer Sentry disabled by configuration');
+      logger.debug("Renderer Sentry disabled by configuration");
     }
     return;
   }
@@ -20,12 +20,12 @@ export const initRendererSentry = () => {
     environment: monitoringConfig.environment,
     release: monitoringConfig.release,
     beforeSend: monitoringConfig.sentry.beforeSend as NonNullable<
-      BrowserOptions['beforeSend']
+      BrowserOptions["beforeSend"]
     >,
     tracesSampleRate: monitoringConfig.sentry.tracesSampleRate,
   });
 
-  SentryRenderer.setTag('process', 'renderer');
+  SentryRenderer.setTag("process", "renderer");
 
   rendererInitialised = true;
 };
@@ -45,7 +45,7 @@ const handleErrorEvent = (event: ErrorEvent) => {
   if (event.cancelable) {
     event.preventDefault();
   }
-  logger.error('Unhandled renderer error', {
+  logger.error("Unhandled renderer error", {
     message: event.message,
     filename: event.filename,
     lineno: event.lineno,
@@ -62,9 +62,9 @@ const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
   const reasonMessage =
     event.reason instanceof Error
       ? event.reason.message
-      : String(event.reason ?? '');
+      : String(event.reason ?? "");
 
-  logger.error('Unhandled renderer promise rejection', {
+  logger.error("Unhandled renderer promise rejection", {
     reason: reasonMessage,
   });
   captureRendererException(event.reason);
@@ -72,7 +72,7 @@ const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
 
 initRendererSentry();
 
-if (typeof window !== 'undefined') {
-  window.addEventListener('error', handleErrorEvent);
-  window.addEventListener('unhandledrejection', handleUnhandledRejection);
+if (typeof window !== "undefined") {
+  window.addEventListener("error", handleErrorEvent);
+  window.addEventListener("unhandledrejection", handleUnhandledRejection);
 }
