@@ -1,4 +1,4 @@
-import { getLogger } from "src/shared/logger";
+import { getLogger } from "../../shared/logger";
 import { isFiniteNumber } from "../../shared/validation/metricValues";
 import type { ThresholdHysteresisConfig } from "../config/detection-config";
 import { isGuardrailDebugEnabled } from "./debug-flags";

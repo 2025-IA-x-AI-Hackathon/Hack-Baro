@@ -1,4 +1,4 @@
-import { clamp, getEnvVar, parseOptionalBoolean } from "src/shared/env";
+import { clamp, getEnvVar, parseOptionalBoolean } from "../../shared/env";
 import { getLogger } from "../../shared/logger";
 import type { SignalProcessingConfig } from "../config/signal-processing-config";
 import {
