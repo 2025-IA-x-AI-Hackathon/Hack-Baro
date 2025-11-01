@@ -21,6 +21,7 @@ export const IPC_CHANNELS = {
   setSetting: "settings:set",
   requestCameraPermission: "camera:request-permission",
   openCameraSettings: "camera:open-settings",
+  appStatusChanged: "app:status-changed",
 } as const;
 
 export type RendererChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
@@ -34,6 +35,7 @@ export const WORKER_MESSAGES = {
   engineTick: "engine:tick",
   engineError: "engine:error",
   triggerWorkerError: "error:trigger-worker",
+  setPaused: "worker:set-paused",
 } as const;
 
 export type WorkerMessageType =
