@@ -32,7 +32,10 @@ import {
   type WorkerMessage,
 } from "../shared/ipcChannels";
 import { getLogger, toErrorPayload } from "../shared/logger";
-import type { EngineFramePayload } from "../shared/types/engine-ipc";
+import type {
+  EngineFramePayload,
+  EngineTickPayload,
+} from "../shared/types/engine-ipc";
 import type { MetricValues } from "../shared/types/metrics";
 import { isMetricValues, isRecord } from "../shared/validation/metricValues";
 // TODO: check whether `openCameraPrivacySettings` is overlapping with cameraPermissions.ts
@@ -46,13 +49,11 @@ import registerCalibrationHandler from "./ipc/calibrationHandler";
 import MenuBuilder from "./menu";
 import { captureException } from "./sentry";
 import { resolveHtmlPath } from "./util";
+import { createDashboardWindow } from "./windows/dashboardWindow";
 import {
   closeSettingsWindow,
   createSettingsWindow,
 } from "./windows/settingsWindow";
-import {
-  createDashboardWindow,
-} from "./windows/dashboardWindow";
 
 dotenvExpand.expand(dotenv.config());
 
@@ -449,7 +450,7 @@ const createColoredIcon = (color: string): Electron.NativeImage => {
     </svg>
   `;
 
-  return nativeImage.createFromBuffer(Buffer.from(svg));
+  return nativeImage.createFromBuffer(Buffer.from(svg, "utf-8"));
 };
 
 /**
@@ -475,7 +476,7 @@ const handlePostureUpdate = (payload: unknown): void => {
     return;
   }
 
-  const tickPayload = payload as { tick?: { zone?: string } };
+  const tickPayload = payload as EngineTickPayload;
   const zone = tickPayload.tick?.zone;
 
   if (!zone || typeof zone !== "string") {
