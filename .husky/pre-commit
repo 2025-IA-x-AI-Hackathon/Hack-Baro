@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+set -eu
+
+echo "husky - running lint-staged on staged files"
+pnpm lint:staged
+
+echo "husky - verifying i18n types"
+pnpm --filter @baro/desktop run i18n:generate-types

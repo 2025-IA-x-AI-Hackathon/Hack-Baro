@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+set -eu
+
+echo "husky - running TypeScript type checks"
+pnpm turbo run type-check
+
+echo "husky - running unit tests"
+pnpm turbo run test

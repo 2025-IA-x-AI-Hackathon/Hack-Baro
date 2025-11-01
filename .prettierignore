@@ -1,0 +1,16 @@
+node_modules
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+dist
+build
+release
+coverage
+.turbo
+.next
+out
+*.log
+apps/desktop/.erb
+apps/desktop/release
+web-bundles
+*.md

@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "jsx": "react-jsx",
+    "allowJs": true,
+    "outDir": ".erb/dll",
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@baro/*": [
+        "../../packages/*/src",
+        "../../packages/*/src/index.ts",
+        "../../packages/*/src/index.tsx"
+      ]
+    }
+  },
+  "include": ["src", "e2e", ".erb/configs", ".erb/scripts", "assets/**/*.d.ts"],
+  "exclude": ["release/build", "release/app/dist", ".erb/dll"]
+}

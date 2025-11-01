@@ -1,0 +1,32 @@
+{
+  "name": "@baro/eslint-config",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "node -e \"console.log('no build step for eslint-config package')\"",
+    "lint": "node -e \"console.log('no lint step for eslint-config package')\"",
+    "test": "node -e \"console.log('no tests defined for eslint-config package')\"",
+    "type-check": "node -e \"console.log('no type checking for eslint-config package')\"",
+    "clean": "rm -rf dist"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./base": "./base.js",
+    "./next-js": "./next.js",
+    "./react-internal": "./react-internal.js"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.34.0",
+    "@next/eslint-plugin-next": "^15.5.0",
+    "eslint": "^9.34.0",
+    "eslint-config-prettier": "^10.1.1",
+    "eslint-plugin-only-warn": "^1.1.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-turbo": "^2.5.0",
+    "globals": "^16.3.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.40.0"
+  }
+}

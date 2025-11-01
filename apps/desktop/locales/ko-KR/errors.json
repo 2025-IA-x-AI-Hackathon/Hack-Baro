@@ -1,0 +1,6 @@
+{
+  "ipc": {
+    "unavailableDescription": "IPC 브리지를 감지하지 못했습니다.",
+    "unavailableTitle": "Electron 컨텍스트를 사용할 수 없습니다"
+  }
+}
