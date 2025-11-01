@@ -15,7 +15,7 @@ import { IPC_CHANNELS } from "../shared/ipcChannels";
 import { getLogger } from "../shared/logger";
 import { ExampleHeroUI } from "./components/ExampleHeroUI";
 import { LanguageSwitcher } from "./components/LanguageSwitcher";
-import { OnboardingWizard } from "./components/onboarding/OnboardingWizard";
+import { OnboardingWizardV2 } from "./components/onboarding/OnboardingWizardV2";
 import "./styles/globals.css";
 
 type ElectronApi = Window["electron"];
@@ -80,6 +80,35 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
   const { t } = useTranslation(["common"]);
   const channels = useMemo(() => electron.channels ?? IPC_CHANNELS, [electron]);
   const { ipcRenderer } = electron;
+
+  const [onboardingCompleted, setOnboardingCompleted] = useState<
+    boolean | null
+  >(null);
+
+  // Check onboarding status on mount
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      try {
+        const result = await ipcRenderer.invoke(
+          IPC_CHANNELS.getSetting,
+          "onboardingCompleted",
+        );
+        setOnboardingCompleted(result === "true");
+      } catch (error) {
+        logger.error("Failed to check onboarding status", { error });
+        setOnboardingCompleted(false);
+      }
+    };
+
+    checkOnboarding().catch((error) => {
+      logger.error("Onboarding check failed", { error });
+      setOnboardingCompleted(false);
+    });
+  }, [ipcRenderer]);
+
+  const handleOnboardingComplete = useCallback(() => {
+    setOnboardingCompleted(true);
+  }, []);
 
   const defaults = useMemo(
     () => ({
@@ -200,8 +229,34 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
     });
   }, [channels.workerRequest, defaults.waitingForWorker, ipcRenderer]);
 
+  // Show loading state while checking onboarding status
+  if (onboardingCompleted === null) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Card className="bg-white/10 p-10 text-center text-white backdrop-blur">
+          <CardBody>
+            <p className="text-lg">Loading...</p>
+          </CardBody>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show onboarding wizard if not completed
+  if (!onboardingCompleted) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <OnboardingWizardV2
+          electron={electron}
+          onComplete={handleOnboardingComplete}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-8">
+      {/* Main app content */}
       <header className="flex flex-col gap-6 rounded-3xl bg-white/10 p-8 text-left shadow-2xl backdrop-blur">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-1 items-center gap-6">
@@ -235,10 +290,6 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
           </Button>
         </div>
       </header>
-
-      <section className="flex justify-center">
-        <OnboardingWizard />
-      </section>
 
       <section className="grid gap-4 md:grid-cols-3">
         <Card className="bg-black/30 text-left backdrop-blur-lg">
