@@ -229,4 +229,198 @@ describe("DailyPostureRepository", () => {
       expect(result.length).toBe(1);
     });
   });
+
+  describe("calculateStreak", () => {
+    it("should return 0 for empty database", async () => {
+      const { calculateStreak } = await import("../dailyPostureRepository.js");
+      
+      (mockDb.all as any).mockReturnValueOnce([]);
+
+      const result = calculateStreak();
+
+      expect(result).toBe(0);
+    });
+
+    it("should return 1 for single day meeting goal", async () => {
+      const { calculateStreak } = await import("../dailyPostureRepository.js");
+      
+      const mockData = [
+        {
+          id: 1,
+          date: "2025-11-02",
+          secondsInGreen: 120,
+          secondsInYellow: 45,
+          secondsInRed: 15,
+          avgScore: 75.0,
+          sampleCount: 180,
+          meetsGoal: 1,
+        },
+      ];
+
+      (mockDb.all as any).mockReturnValueOnce(mockData);
+
+      const result = calculateStreak();
+
+      expect(result).toBe(1);
+    });
+
+    it("should return 3 for 3 consecutive days meeting goal", async () => {
+      const { calculateStreak } = await import("../dailyPostureRepository.js");
+      
+      const mockData = [
+        {
+          id: 3,
+          date: "2025-11-02",
+          avgScore: 85.0,
+          meetsGoal: 1,
+        },
+        {
+          id: 2,
+          date: "2025-11-01",
+          avgScore: 72.0,
+          meetsGoal: 1,
+        },
+        {
+          id: 1,
+          date: "2025-10-31",
+          avgScore: 78.0,
+          meetsGoal: 1,
+        },
+      ];
+
+      (mockDb.all as any).mockReturnValueOnce(mockData);
+
+      const result = calculateStreak();
+
+      expect(result).toBe(3);
+    });
+
+    it("should return 0 when today is below threshold", async () => {
+      const { calculateStreak } = await import("../dailyPostureRepository.js");
+      
+      const mockData = [
+        {
+          id: 2,
+          date: "2025-11-02",
+          avgScore: 65.0, // Below threshold
+          meetsGoal: 0,
+        },
+        {
+          id: 1,
+          date: "2025-11-01",
+          avgScore: 75.0,
+          meetsGoal: 1,
+        },
+      ];
+
+      (mockDb.all as any).mockReturnValueOnce(mockData);
+
+      const result = calculateStreak();
+
+      expect(result).toBe(0);
+    });
+
+    it("should count only recent consecutive days when gap exists", async () => {
+      const { calculateStreak } = await import("../dailyPostureRepository.js");
+      
+      const mockData = [
+        {
+          id: 5,
+          date: "2025-11-02",
+          avgScore: 80.0,
+          meetsGoal: 1,
+        },
+        {
+          id: 4,
+          date: "2025-11-01",
+          avgScore: 75.0,
+          meetsGoal: 1,
+        },
+        {
+          id: 3,
+          date: "2025-10-31",
+          avgScore: 65.0, // Gap - breaks streak
+          meetsGoal: 0,
+        },
+        {
+          id: 2,
+          date: "2025-10-30",
+          avgScore: 85.0,
+          meetsGoal: 1,
+        },
+        {
+          id: 1,
+          date: "2025-10-29",
+          avgScore: 90.0,
+          meetsGoal: 1,
+        },
+      ];
+
+      (mockDb.all as any).mockReturnValueOnce(mockData);
+
+      const result = calculateStreak();
+
+      expect(result).toBe(2); // Only counts 11-02 and 11-01
+    });
+
+    it("should handle boundary case avgScore = 70", async () => {
+      const { calculateStreak } = await import("../dailyPostureRepository.js");
+      
+      const mockData = [
+        {
+          id: 1,
+          date: "2025-11-02",
+          avgScore: 70.0, // Exactly at threshold
+          meetsGoal: 1,
+        },
+      ];
+
+      (mockDb.all as any).mockReturnValueOnce(mockData);
+
+      const result = calculateStreak();
+
+      expect(result).toBe(1);
+    });
+
+    it("should handle boundary case avgScore = 69", async () => {
+      const { calculateStreak } = await import("../dailyPostureRepository.js");
+      
+      const mockData = [
+        {
+          id: 1,
+          date: "2025-11-02",
+          avgScore: 69.0, // Just below threshold
+          meetsGoal: 0,
+        },
+      ];
+
+      (mockDb.all as any).mockReturnValueOnce(mockData);
+
+      const result = calculateStreak();
+
+      expect(result).toBe(0);
+    });
+
+    it("should count 30 consecutive days correctly", async () => {
+      const { calculateStreak } = await import("../dailyPostureRepository.js");
+      
+      // Generate 30 days of data
+      const mockData = Array.from({ length: 30 }, (_, i) => {
+        const date = new Date("2025-11-02");
+        date.setDate(date.getDate() - i);
+        return {
+          id: 30 - i,
+          date: date.toISOString().split("T")[0]!,
+          avgScore: 75.0 + i, // All above threshold
+          meetsGoal: 1,
+        };
+      });
+
+      (mockDb.all as any).mockReturnValueOnce(mockData);
+
+      const result = calculateStreak();
+
+      expect(result).toBe(30);
+    });
+  });
 });
