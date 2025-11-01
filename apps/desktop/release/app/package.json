@@ -6,7 +6,7 @@
   "license": "MIT",
   "author": {
     "name": "Team Baro",
-    "url": "https://github.com/team-baro"
+    "url": "https://github.com/2025-IA-x-AI-Hackathon/Hack-Baro"
   },
   "main": "./dist/main/main.js",
   "scripts": {

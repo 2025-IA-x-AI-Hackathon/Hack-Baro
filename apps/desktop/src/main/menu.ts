@@ -190,7 +190,7 @@ export default class MenuBuilder {
           label: "Source Code (GitHub)",
           click() {
             shell
-              .openExternal("https://github.com/team-baro/posely")
+              .openExternal("https://github.com/2025-IA-x-AI-Hackathon/Hack-Baro/posely")
               .catch((error: unknown) => {
                 logger.warn("Failed to open GitHub from menu", {
                   context: "darwin:help-menu",
@@ -203,7 +203,7 @@ export default class MenuBuilder {
           label: "Report an Issue",
           click() {
             shell
-              .openExternal("https://github.com/team-baro/posely/issues")
+              .openExternal("https://github.com/2025-IA-x-AI-Hackathon/Hack-Baro/posely/issues")
               .catch((error: unknown) => {
                 logger.warn("Failed to open issue tracker from menu", {
                   context: "darwin:help-menu",
@@ -315,7 +315,7 @@ export default class MenuBuilder {
             label: "Source Code (GitHub)",
             click() {
               shell
-                .openExternal("https://github.com/team-baro/posely")
+                .openExternal("https://github.com/2025-IA-x-AI-Hackathon/Hack-Baro/posely")
                 .catch((error: unknown) => {
                   logger.warn("Failed to open GitHub from menu", {
                     context: "default:help-menu",
@@ -328,7 +328,7 @@ export default class MenuBuilder {
             label: "Report an Issue",
             click() {
               shell
-                .openExternal("https://github.com/team-baro/posely/issues")
+                .openExternal("https://github.com/2025-IA-x-AI-Hackathon/Hack-Baro/posely/issues")
                 .catch((error: unknown) => {
                   logger.warn("Failed to open issue tracker from menu", {
                     context: "default:help-menu",
