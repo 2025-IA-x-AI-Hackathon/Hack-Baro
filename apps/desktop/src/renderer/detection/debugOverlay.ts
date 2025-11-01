@@ -109,7 +109,7 @@ const renderOverlay = () => {
   const confidenceLine = `Conf: face=${formatNumber(sample.faceConfidence)}  pose=${formatNumber(sample.poseConfidence)}  illum=${formatNumber(sample.illuminationConfidence)}`;
   const flags = `Presence: ${sample.presence}\n${confidenceLine}\nYaw de-weighted: ${sample.yawDeweighted ? "YES" : "NO"}  |  Low confidence: ${sample.lowConfidence ? "YES" : "NO"}  |  DPR baseline pending: ${sample.baselinePending ? "YES" : "NO"}`;
 
-  const metricKeys = metrics ? (Object.keys(metrics) as MetricKeys[]) : [];
+  const metricKeys = Object.keys(metrics) as MetricKeys[];
   const metricRows = metricKeys
     .map((key) => {
       const metric = metrics[key];
