@@ -23,21 +23,32 @@ export const upsertDailyPostureLog = (
       .get();
 
     if (existing) {
-      // Update existing record
+      // Accumulate values instead of overwriting to handle worker restarts
+      const newSampleCount = existing.sampleCount + (data.sampleCount ?? 0);
+      let newAvgScore = existing.avgScore;
+      
+      if (newSampleCount > 0) {
+        // Weighted average: combine existing and new samples
+        newAvgScore =
+          (existing.avgScore * existing.sampleCount +
+            (data.avgScore ?? 0) * (data.sampleCount ?? 0)) /
+          newSampleCount;
+      }
+      
       const updated = db
         .update(dailyPostureLogs)
         .set({
-          secondsInGreen: data.secondsInGreen,
-          secondsInYellow: data.secondsInYellow,
-          secondsInRed: data.secondsInRed,
-          avgScore: data.avgScore,
-          sampleCount: data.sampleCount,
+          secondsInGreen: existing.secondsInGreen + (data.secondsInGreen ?? 0),
+          secondsInYellow: existing.secondsInYellow + (data.secondsInYellow ?? 0),
+          secondsInRed: existing.secondsInRed + (data.secondsInRed ?? 0),
+          avgScore: newAvgScore,
+          sampleCount: newSampleCount,
         })
         .where(eq(dailyPostureLogs.date, data.date))
         .returning()
         .get();
 
-      logger.info(`Updated daily posture log for date: ${data.date}`);
+      logger.info(`Updated daily posture log for date: ${data.date} (accumulated values)`);
       return updated;
     } else {
       // Insert new record
