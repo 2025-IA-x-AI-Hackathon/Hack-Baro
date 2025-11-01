@@ -10,6 +10,7 @@ import {
 } from "@heroui/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { HashRouter, Route, Routes } from "react-router-dom";
 import icon from "../../assets/icon.svg";
 import { IPC_CHANNELS } from "../shared/ipcChannels";
 import { getLogger } from "../shared/logger";
@@ -18,6 +19,7 @@ import { ExampleHeroUI } from "./components/ExampleHeroUI";
 import { LanguageSwitcher } from "./components/LanguageSwitcher";
 import { useDetectionPipeline } from "./detection/useDetectionPipeline";
 import { OnboardingWizardV2 } from "./components/onboarding/OnboardingWizardV2";
+import { Settings } from "./components/settings/Settings";
 import "./styles/globals.css";
 
 type ElectronApi = Window["electron"];
@@ -585,11 +587,21 @@ function Hello() {
 export default function App() {
   return (
     <HeroUIProvider>
-      <div className="min-h-screen bg-gradient-to-br from-amber-300 via-rose-500 to-indigo-700 px-4 py-12 text-white md:px-8">
-        <div className="mx-auto w-full max-w-5xl">
-          <Hello />
-        </div>
-      </div>
+      <HashRouter>
+        <Routes>
+          <Route path="/settings" element={<Settings />} />
+          <Route
+            path="/"
+            element={
+              <div className="min-h-screen bg-gradient-to-br from-amber-300 via-rose-500 to-indigo-700 px-4 py-12 text-white md:px-8">
+                <div className="mx-auto w-full max-w-5xl">
+                  <Hello />
+                </div>
+              </div>
+            }
+          />
+        </Routes>
+      </HashRouter>
     </HeroUIProvider>
   );
 }
