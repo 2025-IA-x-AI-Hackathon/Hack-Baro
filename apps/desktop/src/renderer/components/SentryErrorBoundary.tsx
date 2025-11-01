@@ -8,6 +8,15 @@ type SentryErrorBoundaryProps = {
 
 type SentryErrorBoundaryState = {
   hasError: boolean;
+  error?: Error;
+  info?: ErrorInfo;
+};
+
+const isProductionEnv = (): boolean => {
+  if (typeof process === "undefined" || !process?.env) {
+    return false;
+  }
+  return process.env.NODE_ENV === "production";
 };
 
 /**
@@ -24,14 +33,14 @@ class SentryErrorBoundary extends Component<
     this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(): SentryErrorBoundaryState {
-    return { hasError: true };
+  static getDerivedStateFromError(error: Error): SentryErrorBoundaryState {
+    return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     captureRendererException(error);
 
-    if (process.env.NODE_ENV !== "production") {
+    if (!isProductionEnv()) {
       // eslint-disable-next-line no-console -- Helpful during development to see the component stack.
       console.error(
         "Renderer error boundary caught an error",
@@ -39,13 +48,35 @@ class SentryErrorBoundary extends Component<
         errorInfo,
       );
     }
+
+    this.setState({ error, info: errorInfo });
   }
 
   render() {
-    const { hasError } = this.state;
+    const { hasError, error, info } = this.state;
     const { fallback, children } = this.props;
 
     if (hasError) {
+      if (!isProductionEnv()) {
+        return (
+          <div className="renderer-error-boundary p-4 text-left">
+            <h1 className="text-lg font-semibold">Something went wrong</h1>
+            <p className="mb-2 text-sm opacity-80">
+              Error: {error?.message ?? "Unknown error"}
+            </p>
+            {error?.stack ? (
+              <pre className="overflow-auto rounded bg-black/10 p-2 text-xs">
+                {error.stack}
+              </pre>
+            ) : null}
+            {info?.componentStack ? (
+              <pre className="mt-2 overflow-auto rounded bg-black/5 p-2 text-xs">
+                {info.componentStack}
+              </pre>
+            ) : null}
+          </div>
+        );
+      }
       return fallback;
     }
 

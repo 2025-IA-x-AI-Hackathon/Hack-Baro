@@ -6,7 +6,7 @@ import webpack from "webpack";
 import { merge } from "webpack-merge";
 import { dependencies } from "../../package.json";
 import checkNodeEnv from "../scripts/check-node-env";
-import baseConfig from "./webpack.config.base";
+import baseConfig, { SHARED_ENV_VARS } from "./webpack.config.base";
 import webpackPaths from "./webpack.paths";
 
 checkNodeEnv("development");
@@ -59,6 +59,7 @@ const configuration: webpack.Configuration = {
      */
     new webpack.EnvironmentPlugin({
       NODE_ENV: "development",
+      ...SHARED_ENV_VARS,
     }),
 
     new webpack.LoaderOptionsPlugin({

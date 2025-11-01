@@ -3,12 +3,29 @@ export type FrameGovernorOptions = {
   minimumIntervalMs?: number;
 };
 
-const TARGET_FPS = 30;
-const DEFAULT_MINIMUM_INTERVAL_MS = 5;
-const DEFAULT_FRAME_INTERVAL_MS = 33.33; // ~30 FPS
+const TARGET_FPS: number = 15;
+const DEFAULT_MINIMUM_INTERVAL_MS: number = 5;
+const DEFAULT_FRAME_INTERVAL_MS: number = 66.67; // 1000ms / 15fps
+// Using toFixed to avoid floating point precision issues in calculations
+// e.g., 1000 / 15 = 66.66666666666667
+// This ensures consistent frame interval calculations
+const FRAME_INTERVAL_MS: number = Number(
+  (Number.isFinite(1000 / TARGET_FPS)
+    ? 1000 / TARGET_FPS
+    : DEFAULT_FRAME_INTERVAL_MS
+  ).toFixed(2),
+);
+
+const computeFrameInterval = (fps: number): number => {
+  if (!Number.isFinite(fps) || fps <= 0) {
+    return FRAME_INTERVAL_MS;
+  }
+  const interval = 1000 / fps;
+  return Number(interval.toFixed(2));
+};
 
 export class FrameGovernor {
-  private readonly frameInterval: number;
+  private frameInterval: number;
 
   private nextAllowedTime = 0;
 
@@ -18,10 +35,7 @@ export class FrameGovernor {
     targetFps = TARGET_FPS,
     minimumIntervalMs = DEFAULT_MINIMUM_INTERVAL_MS,
   }: FrameGovernorOptions = {}) {
-    const interval = 1000 / targetFps;
-    this.frameInterval = Number.isFinite(interval)
-      ? interval
-      : DEFAULT_FRAME_INTERVAL_MS;
+    this.frameInterval = computeFrameInterval(targetFps);
     this.minimumInterval = minimumIntervalMs;
   }
 
@@ -59,5 +73,13 @@ export class FrameGovernor {
 
   reset(now = performance.now()): void {
     this.nextAllowedTime = now;
+  }
+
+  setTargetFps(targetFps: number): void {
+    const nextInterval = computeFrameInterval(targetFps);
+    if (Math.abs(nextInterval - this.frameInterval) < 0.01) {
+      return;
+    }
+    this.frameInterval = nextInterval;
   }
 }

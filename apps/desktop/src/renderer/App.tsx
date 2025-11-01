@@ -7,16 +7,31 @@ import {
   Code,
   HeroUIProvider,
   Link,
+  Switch,
 } from "@heroui/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HashRouter, Route, Routes } from "react-router-dom";
 import icon from "../../assets/icon.svg";
+import type { ElectronHandler } from "../main/preload";
+import { parseBooleanFlag } from "../shared/env";
 import { IPC_CHANNELS } from "../shared/ipcChannels";
+import type { RendererChannel } from "../shared/ipcChannels";
 import { getLogger } from "../shared/logger";
+import { listPerformanceModePresets } from "../shared/sampling";
 import type { DetectorKind } from "../shared/types/detector";
-import { ExampleHeroUI } from "./components/ExampleHeroUI";
+import type { EngineTickPayload } from "../shared/types/engine-ipc";
+import type { EngineTick } from "../shared/types/engine-output";
+import { useCameraPermission } from "./camera/useCameraPermission";
+import ExampleHeroUI from "./components/ExampleHeroUI";
 import { LanguageSwitcher } from "./components/LanguageSwitcher";
+import { OnboardingWizard } from "./components/onboarding/OnboardingWizard";
+import { DetectionDebugHud } from "./detection/DebugHud";
+import {
+  PERFORMANCE_DELEGATES,
+  PERFORMANCE_FPS_OPTIONS,
+  PERFORMANCE_SHORT_SIDE_OPTIONS,
+} from "./detection/detectionPipeline";
 import { useDetectionPipeline } from "./detection/useDetectionPipeline";
 import { OnboardingWizardV2 } from "./components/onboarding/OnboardingWizardV2";
 import { Settings } from "./components/settings/Settings";
@@ -82,7 +97,10 @@ const markAsCustom = (value: string): MessageState => ({
 
 function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
   const { t } = useTranslation(["common"]);
-  const channels = useMemo(() => electron.channels ?? IPC_CHANNELS, [electron]);
+  const channels = useMemo<ElectronHandler["channels"]>(
+    () => electron.channels ?? IPC_CHANNELS,
+    [electron],
+  );
   const { ipcRenderer } = electron;
 
   const [onboardingCompleted, setOnboardingCompleted] = useState<
@@ -119,11 +137,46 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
 
   const preferredDetector =
     (electron.env?.POSELY_DETECTOR as DetectorKind | undefined) ?? "mediapipe";
-  const detection = useDetectionPipeline({ detector: preferredDetector });
+  const cameraPermission = useCameraPermission(electron);
+  const detectionEnabled = cameraPermission.state === "granted";
+  const detection = useDetectionPipeline({
+    detector: preferredDetector,
+    enabled: detectionEnabled,
+  });
   const detectionMetrics = detection.metrics;
+  const detectionDebug = detection.debug;
+  const detectionLandmarks = detection.landmarks;
+  const { setCameraPreviewVisible } = detection;
+  const {
+    performanceConfig,
+    updatePerformance,
+    isApplyingPerformance,
+    performanceMode,
+    setPerformanceMode,
+    isSwitchingMode,
+  } = detection;
+  const envDebugHud = parseBooleanFlag(electron.env?.POSELY_DEBUG_HUD);
+  const isDevelopmentBuild =
+    (electron.env?.NODE_ENV ?? "development").toLowerCase() !== "production";
+  const [hudToggle, setHudToggle] = useState(envDebugHud || isDevelopmentBuild);
+  const cameraPreviewDefault = parseBooleanFlag(
+    electron.env?.POSELY_DEBUG_CAMERA_PREVIEW,
+  );
+  const [cameraPreviewToggle, setCameraPreviewToggle] =
+    useState(cameraPreviewDefault);
+  useEffect(() => {
+    if (!isDevelopmentBuild) {
+      setHudToggle(envDebugHud);
+    }
+  }, [envDebugHud, isDevelopmentBuild]);
+  const showDebugHud = isDevelopmentBuild ? hudToggle : envDebugHud;
+  useEffect(() => {
+    setCameraPreviewVisible(cameraPreviewToggle && detectionEnabled);
+  }, [cameraPreviewToggle, detectionEnabled, setCameraPreviewVisible]);
   const formatMs = useCallback((value?: number) => {
     return value === undefined ? "0.0" : value.toFixed(1);
   }, []);
+  const performanceModes = useMemo(() => listPerformanceModePresets(), []);
 
   const defaults = useMemo(
     () => ({
@@ -147,6 +200,50 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
     [t],
   );
 
+  const cameraCopy = useMemo(
+    () => ({
+      title: t("camera.title", "Enable Camera Access"),
+      description: t(
+        "camera.description",
+        "Posely needs access to your camera to analyze posture in real time.",
+      ),
+      requestButton: t("camera.requestButton", "Allow Camera"),
+      requesting: t(
+        "camera.requesting",
+        "Waiting for the camera permission prompt…",
+      ),
+      deniedTitle: t("camera.deniedTitle", "Camera access is blocked"),
+      deniedDescription: t(
+        "camera.deniedDescription",
+        "Enable camera access so Posely can capture frames for posture analysis.",
+      ),
+      openSettings: t("camera.openSettings", "Open System Settings"),
+      retry: t("camera.retry", "Try Again"),
+      revoked: t(
+        "camera.revoked",
+        "Camera access was disabled while Posely was running. Re-enable it in System Settings to resume posture analysis.",
+      ),
+      errorTitle: t("camera.errorTitle", "Camera access unavailable"),
+      errorDescription: t(
+        "camera.errorDescription",
+        "We couldn't access your camera. Check your device connection and privacy settings.",
+      ),
+      statusWaiting: t(
+        "camera.statusWaiting",
+        "Waiting for camera permission…",
+      ),
+      instructions: [
+        t("camera.instructions.openSettings", "Open System Settings"),
+        t(
+          "camera.instructions.privacySecurityCamera",
+          "Navigate to Privacy & Security → Camera",
+        ),
+        t("camera.instructions.togglePosely", "Enable Posely"),
+      ],
+    }),
+    [t],
+  );
+
   const [mainResponse, setMainResponse] = useState<MessageState>(() =>
     createDefaultState(defaults.waitingForPing),
   );
@@ -156,6 +253,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
   const [workerResponse, setWorkerResponse] = useState<MessageState>(() =>
     createDefaultState(defaults.noWorkerResponse),
   );
+  const [engineTick, setEngineTick] = useState<EngineTick | null>(null);
 
   useEffect(() => {
     setMainResponse((previous) =>
@@ -216,6 +314,16 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
       },
     );
 
+    const disposeEngineTick = ipcRenderer.on(
+      channels.engineTick,
+      (payload: unknown) => {
+        if (payload && typeof payload === "object" && "tick" in payload) {
+          const enginePayload = payload as EngineTickPayload;
+          setEngineTick(enginePayload.tick);
+        }
+      },
+    );
+
     ipcRenderer.sendMessage(channels.workerRequest, {
       requestedAt: new Date().toISOString(),
       reason: "initial-status-check",
@@ -225,8 +333,115 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
       disposePing?.();
       disposeWorkerStatus?.();
       disposeWorkerResponse?.();
+      disposeEngineTick?.();
     };
   }, [channels, formatIpcArgs, ipcRenderer]);
+
+  const detectionStatus = detectionEnabled
+    ? detection.status
+    : cameraCopy.statusWaiting;
+
+  const renderCameraPermissionCard = () => {
+    switch (cameraPermission.state) {
+      case "granted":
+        return null;
+      case "requesting":
+        return (
+          <Card className="bg-white/10 backdrop-blur">
+            <CardHeader className="flex flex-col gap-2">
+              <h2 className="text-lg font-semibold text-white">
+                {cameraCopy.title}
+              </h2>
+              <p className="text-sm text-white/70">{cameraCopy.requesting}</p>
+            </CardHeader>
+            <CardBody className="text-sm text-white/80">
+              {cameraCopy.description}
+            </CardBody>
+          </Card>
+        );
+      case "denied":
+        return (
+          <Card className="bg-rose-500/20 backdrop-blur">
+            <CardHeader className="flex flex-col gap-2 text-white">
+              <h2 className="text-lg font-semibold">
+                {cameraCopy.deniedTitle}
+              </h2>
+              <p className="text-sm text-white/80">
+                {cameraPermission.error === "__revoked__"
+                  ? cameraCopy.revoked
+                  : cameraCopy.deniedDescription}
+              </p>
+            </CardHeader>
+            <CardBody className="space-y-3 text-sm text-white/80">
+              <ol className="list-decimal space-y-1 pl-5">
+                {cameraCopy.instructions.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+            </CardBody>
+            <CardFooter className="gap-3">
+              <Button
+                color="primary"
+                onPress={() => {
+                  cameraPermission.openSystemSettings();
+                }}
+              >
+                {cameraCopy.openSettings}
+              </Button>
+              <Button
+                variant="bordered"
+                onPress={() => {
+                  cameraPermission.requestPermission();
+                }}
+              >
+                {cameraCopy.retry}
+              </Button>
+            </CardFooter>
+          </Card>
+        );
+      case "error":
+        return (
+          <Card className="bg-amber-500/20 backdrop-blur">
+            <CardHeader className="flex flex-col gap-2 text-white">
+              <h2 className="text-lg font-semibold">{cameraCopy.errorTitle}</h2>
+              <p className="text-sm text-white/80">
+                {cameraPermission.error ?? cameraCopy.errorDescription}
+              </p>
+            </CardHeader>
+            <CardFooter>
+              <Button
+                onPress={() => {
+                  cameraPermission.openSystemSettings();
+                }}
+              >
+                {cameraCopy.openSettings}
+              </Button>
+            </CardFooter>
+          </Card>
+        );
+      default:
+        return (
+          <Card className="bg-white/10 backdrop-blur">
+            <CardHeader className="flex flex-col gap-2">
+              <h2 className="text-lg font-semibold text-white">
+                {cameraCopy.title}
+              </h2>
+              <p className="text-sm text-white/80">{cameraCopy.description}</p>
+            </CardHeader>
+            <CardFooter>
+              <Button
+                color="primary"
+                onPress={() => {
+                  cameraPermission.requestPermission();
+                }}
+              >
+                {cameraCopy.requestButton}
+              </Button>
+            </CardFooter>
+          </Card>
+        );
+    }
+  };
 
   const sendPing = useCallback(() => {
     setMainResponse(createDefaultState(defaults.waitingForPing));
@@ -309,7 +524,13 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
         </div>
       </header>
 
-      <section className="grid gap-4 md:grid-cols-3">
+      {renderCameraPermissionCard()}
+      {/* TODO: check onboarding flow & whether renderCameraPermissionCard is required */}
+      <section className="flex justify-center">
+        <OnboardingWizard />
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-4">
         <Card className="bg-black/30 text-left backdrop-blur-lg">
           <CardHeader className="flex flex-col gap-1 text-white">
             <span className="text-sm uppercase tracking-wide text-white/60">
@@ -364,7 +585,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
             <div className="flex justify-between">
               <span>Status</span>
               <span className="font-semibold capitalize">
-                {detection.status}
+                {detectionStatus}
               </span>
             </div>
             <div className="flex justify-between">
@@ -409,6 +630,174 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
                 {formatMs(detectionMetrics?.averageDownscaleMs)}
               </span>
             </div>
+            <div className="flex justify-between">
+              <span>Main Thread (ms)</span>
+              <span className="font-semibold">
+                {formatMs(detectionMetrics?.lastMainThreadMs)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Budget overruns</span>
+              <span className="font-semibold">
+                {detectionMetrics?.mainThreadBudgetOverruns ?? 0}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Presence</span>
+              <span className="font-semibold">
+                {detectionLandmarks?.presence ?? "UNKNOWN"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Reliability</span>
+              <span className="font-semibold">
+                {detectionLandmarks?.reliability ?? "UNKNOWN"}
+              </span>
+            </div>
+            <div className="mt-3 border-t border-white/10 pt-3">
+              <span className="mb-2 block text-xs uppercase tracking-wide text-white/50">
+                Performance Mode
+              </span>
+              <div className="flex flex-wrap gap-1">
+                {performanceModes.map((mode) => (
+                  <Button
+                    key={mode.id}
+                    size="sm"
+                    variant={performanceMode === mode.id ? "solid" : "bordered"}
+                    color={performanceMode === mode.id ? "primary" : "default"}
+                    isDisabled={
+                      isSwitchingMode ||
+                      isApplyingPerformance ||
+                      !detectionEnabled
+                    }
+                    onPress={() => {
+                      setPerformanceMode(mode.id);
+                    }}
+                  >
+                    {mode.label}
+                  </Button>
+                ))}
+              </div>
+              <span className="mb-2 mt-4 block text-xs uppercase tracking-wide text-white/50">
+                Advanced Overrides
+              </span>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-3">
+                  <span>Delegate</span>
+                  <div className="flex gap-1">
+                    {PERFORMANCE_DELEGATES.map((delegate) => (
+                      <Button
+                        key={delegate}
+                        size="sm"
+                        variant={
+                          performanceConfig.delegate === delegate
+                            ? "solid"
+                            : "bordered"
+                        }
+                        color={
+                          performanceConfig.delegate === delegate
+                            ? "primary"
+                            : "default"
+                        }
+                        isDisabled={
+                          isApplyingPerformance ||
+                          isSwitchingMode ||
+                          !detectionEnabled
+                        }
+                        onPress={() => {
+                          updatePerformance({ delegate });
+                        }}
+                      >
+                        {delegate}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span>Target FPS</span>
+                  <div className="flex gap-1">
+                    {PERFORMANCE_FPS_OPTIONS.map((fps) => (
+                      <Button
+                        key={fps}
+                        size="sm"
+                        variant={
+                          performanceConfig.fps === fps ? "solid" : "bordered"
+                        }
+                        color={
+                          performanceConfig.fps === fps ? "primary" : "default"
+                        }
+                        isDisabled={
+                          isApplyingPerformance ||
+                          isSwitchingMode ||
+                          !detectionEnabled
+                        }
+                        onPress={() => {
+                          updatePerformance({ fps });
+                        }}
+                      >
+                        {fps} fps
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span>Short Side</span>
+                  <div className="flex gap-1">
+                    {PERFORMANCE_SHORT_SIDE_OPTIONS.map((size) => (
+                      <Button
+                        key={size}
+                        size="sm"
+                        variant={
+                          performanceConfig.shortSide === size
+                            ? "solid"
+                            : "bordered"
+                        }
+                        color={
+                          performanceConfig.shortSide === size
+                            ? "primary"
+                            : "default"
+                        }
+                        isDisabled={
+                          isApplyingPerformance ||
+                          isSwitchingMode ||
+                          !detectionEnabled
+                        }
+                        onPress={() => {
+                          updatePerformance({ shortSide: size });
+                        }}
+                      >
+                        {size}px
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+            {isDevelopmentBuild ? (
+              <div className="flex items-center justify-between">
+                <span>Debug HUD</span>
+                <Switch
+                  isSelected={hudToggle}
+                  size="sm"
+                  onValueChange={setHudToggle}
+                >
+                  {hudToggle ? "On" : "Off"}
+                </Switch>
+              </div>
+            ) : null}
+            {isDevelopmentBuild ? (
+              <div className="flex items-center justify-between">
+                <span>Camera Preview</span>
+                <Switch
+                  isSelected={cameraPreviewToggle && detectionEnabled}
+                  size="sm"
+                  isDisabled={!detectionEnabled}
+                  onValueChange={setCameraPreviewToggle}
+                >
+                  {cameraPreviewToggle && detectionEnabled ? "On" : "Off"}
+                </Switch>
+              </div>
+            ) : null}
             {detection.error ? (
               <Code
                 color="danger"
@@ -421,7 +810,17 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
         </Card>
       </section>
 
-      <ExampleHeroUI onPingMain={sendPing} onPingWorker={pingWorker} />
+      <ExampleHeroUI
+        engineTick={engineTick}
+        onPingMain={sendPing}
+        onPingWorker={pingWorker}
+      />
+
+      <DetectionDebugHud
+        state={detectionDebug ?? null}
+        visible={showDebugHud}
+        overlay={cameraPreviewToggle && detectionEnabled}
+      />
 
       <section className="grid gap-4 md:grid-cols-2">
         <Card className="bg-white/10 text-left backdrop-blur">
@@ -505,7 +904,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
         <CardFooter className="flex justify-end space-x-2">
           <Button
             color="danger"
-            onClick={() => {
+            onPress={() => {
               throw new Error("Intentional Renderer Error");
             }}
           >
@@ -513,9 +912,9 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
           </Button>
           <Button
             color="danger"
-            onClick={() => {
+            onPress={() => {
               ipcRenderer
-                .invoke(channels.TRIGGER_MAIN_ERROR)
+                .invoke(channels.triggerMainError as RendererChannel)
                 .catch((error: unknown) => {
                   logger.error(
                     "Failed to trigger main process error from renderer",
@@ -532,8 +931,10 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
           </Button>
           <Button
             color="danger"
-            onClick={() =>
-              ipcRenderer.sendMessage(channels.TRIGGER_WORKER_ERROR)
+            onPress={() =>
+              ipcRenderer.sendMessage(
+                channels.triggerWorkerError as RendererChannel,
+              )
             }
           >
             {t("actions.triggerWorkerError", "Trigger Worker Error")}

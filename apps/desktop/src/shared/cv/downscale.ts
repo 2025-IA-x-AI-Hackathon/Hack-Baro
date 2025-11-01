@@ -124,10 +124,37 @@ export const downscaleFrame = async (
     };
   }
 
+  // Try hardware-accelerated resize via createImageBitmap options when available.
+  try {
+    const bitmap = await createImageBitmap(
+      source as ImageBitmapSource,
+      0,
+      0,
+      sourceWidth,
+      sourceHeight,
+      {
+        resizeWidth: dimensions.width,
+        resizeHeight: dimensions.height,
+        resizeQuality: "medium",
+        colorSpaceConversion: "none",
+        premultiplyAlpha: "none",
+      } as ImageBitmapOptions,
+    );
+
+    return {
+      bitmap,
+      width: dimensions.width,
+      height: dimensions.height,
+      sourceWidth,
+      sourceHeight,
+      downscaled: dimensions.downscaled,
+    };
+  } catch {
+    // Fallback to canvas-based scaling
+  }
+
   const canvas = getCanvas(dimensions.width, dimensions.height);
-
   drawSourceToCanvas(canvas, source);
-
   const bitmap = await createImageBitmap(canvas);
 
   return {

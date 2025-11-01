@@ -8,7 +8,7 @@ import type {
   DetectorResult,
   FrameMetadata,
 } from "../../shared/types/detector";
-import { DETECTION_WORKER_URL } from "./workerEntrypoint.mjs";
+import { createDetectionWorker } from "./workerEntrypoint.mjs";
 
 type EventCallback<T> = (_payload: T) => void;
 
@@ -40,7 +40,7 @@ export class DetectionWorkerBridge {
     error: new Set(),
   };
 
-  private isInitialised = false;
+  private isinitialized = false;
 
   private pendingInitialise: Promise<void> | null = null;
 
@@ -50,9 +50,7 @@ export class DetectionWorkerBridge {
 
   private ensureWorker(): Worker {
     if (!this.worker) {
-      this.worker = new Worker(DETECTION_WORKER_URL, {
-        type: "module",
-      });
+      this.worker = createDetectionWorker();
 
       this.worker.addEventListener(
         "message",
@@ -61,7 +59,7 @@ export class DetectionWorkerBridge {
 
           switch (message.type) {
             case "ready":
-              this.isInitialised = true;
+              this.isinitialized = true;
               this.busy = false;
               this.emit("ready", message.payload);
               break;
@@ -84,6 +82,21 @@ export class DetectionWorkerBridge {
           }
         },
       );
+
+      this.worker.addEventListener("error", (event: ErrorEvent) => {
+        this.busy = false;
+        const errorMessage =
+          event.message || "Inference worker failed to initialise";
+        logger.error("Inference worker script error", {
+          message: errorMessage,
+          filename: event.filename,
+          lineno: event.lineno,
+          colno: event.colno,
+        });
+        this.emit("error", {
+          message: errorMessage,
+        });
+      });
     }
 
     return this.worker;
@@ -136,7 +149,7 @@ export class DetectionWorkerBridge {
   }
 
   initialise(payload: InitPayload): Promise<void> {
-    if (this.isInitialised) {
+    if (this.isinitialized) {
       return Promise.resolve();
     }
 
@@ -170,7 +183,7 @@ export class DetectionWorkerBridge {
   }
 
   isReady(): boolean {
-    return this.isInitialised;
+    return this.isinitialized;
   }
 
   isBusy(): boolean {
@@ -188,7 +201,7 @@ export class DetectionWorkerBridge {
 
   processFrame(bitmap: ImageBitmap, metadata: FrameMetadata): void {
     if (!this.worker) {
-      throw new Error("Worker has not been initialised");
+      throw new Error("Worker has not been initialized");
     }
     this.busy = true;
     const message: InferenceWorkerInboundMessage = {
@@ -212,7 +225,7 @@ export class DetectionWorkerBridge {
     } satisfies InferenceWorkerInboundMessage);
     this.worker.terminate();
     this.worker = null;
-    this.isInitialised = false;
+    this.isinitialized = false;
     this.busy = false;
   }
 }

@@ -6,7 +6,10 @@ import type {
 } from "../shared/detection/messages";
 import { getLogger } from "../shared/logger";
 import type { Detector, DetectorKind } from "../shared/types/detector";
+import { updateDetectionGuardrailConfig } from "./config/detection-config";
 import createDetector from "./detectors";
+import { setGuardrailDebugEnabled } from "./guardrails/debug-flags";
+import { captureWorkerException } from "./sentry";
 
 type WorkerContext = typeof globalThis & {
   postMessage: typeof globalThis.postMessage;
@@ -35,12 +38,35 @@ const initializedetector = async (
   message: InferenceWorkerInboundMessage & { type: "init" },
 ) => {
   detectorKind = message.payload.kind;
+
+  setGuardrailDebugEnabled(Boolean(message.payload.debugGuardrailsVerbose));
+
+  const { guardrailOverrides } = message.payload;
+  if (guardrailOverrides) {
+    updateDetectionGuardrailConfig(guardrailOverrides);
+    logger.info("Applied guardrail overrides to inference worker", {
+      guardrailOverrides,
+    });
+  }
+
   detector = createDetector(message.payload.kind);
 
-  await detector.initialize({
-    ...message.payload,
-    assetBaseUrl: message.payload.assetBaseUrl || MEDIAPIPE_ASSETS.baseUrl,
-  });
+  try {
+    await detector.initialize({
+      ...message.payload,
+      assetBaseUrl: message.payload.assetBaseUrl || MEDIAPIPE_ASSETS.baseUrl,
+    });
+  } catch (error) {
+    captureWorkerException(error);
+    throw error instanceof Error
+      ? error
+      : new Error(
+          String(
+            JSON.stringify(error) ||
+              "Unknown error during detector initialization",
+          ),
+        );
+  }
 
   post({
     type: "ready",
@@ -67,6 +93,7 @@ const processFrame = async (
     });
   } catch (error) {
     shouldReleaseBitmap = true;
+    captureWorkerException(error);
     post({
       type: "error",
       payload: {
@@ -120,6 +147,7 @@ workerContext.addEventListener(
         break;
       case "frame":
         processFrame(message).catch((error) => {
+          captureWorkerException(error);
           post({
             type: "error",
             payload: {
@@ -131,6 +159,7 @@ workerContext.addEventListener(
         break;
       case "shutdown":
         shutdown().catch((error) => {
+          captureWorkerException(error);
           post({
             type: "error",
             payload: {

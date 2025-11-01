@@ -14,3 +14,6 @@ apps/desktop/.erb
 apps/desktop/release
 web-bundles
 *.md
+
+vision_wasm_internal.js
+vision_wasm_nosimd_internal.js

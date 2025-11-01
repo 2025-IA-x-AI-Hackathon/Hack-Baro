@@ -1,14 +1,7 @@
+import { parseBooleanFlag } from "../../shared/env";
+
 export type RuntimePreferences = {
   preferContinuityCamera: boolean;
-};
-
-const parseBooleanFlag = (value: string | null): boolean => {
-  if (!value) {
-    return false;
-  }
-
-  const normalised = value.trim().toLowerCase();
-  return normalised === "1" || normalised === "true";
 };
 
 export const getRuntimePreferences = (
