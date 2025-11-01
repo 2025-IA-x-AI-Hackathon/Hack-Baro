@@ -6,7 +6,7 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
-import { BrowserWindow, app, ipcMain, session, shell } from "electron";
+import { BrowserWindow, app, ipcMain, session, shell, Tray, Menu as ElectronMenu, nativeImage } from "electron";
 import log from "electron-log";
 import { autoUpdater } from "electron-updater";
 import { Worker } from "node:worker_threads";
@@ -26,9 +26,14 @@ import registerCalibrationHandler from "./ipc/calibrationHandler";
 import MenuBuilder from "./menu";
 import { captureException } from "./sentry";
 import { resolveHtmlPath } from "./util";
+import {
+  createSettingsWindow,
+  closeSettingsWindow,
+} from "./windows/settingsWindow";
 
 let mainWindow: BrowserWindow | null = null;
 let backgroundWorker: Worker | null = null;
+let tray: Tray | null = null;
 
 const pendingWorkerMessages: WorkerMessage[] = [];
 const logger = getLogger("main-process", "main");
@@ -215,6 +220,73 @@ const configureSecurityHeaders = () => {
   securityConfigured = true;
 };
 
+const createTray = () => {
+  if (tray) {
+    return tray;
+  }
+
+  const RESOURCES_PATH = app.isPackaged
+    ? path.join(process.resourcesPath, "assets")
+    : path.join(__dirname, "../../assets");
+
+  const getAssetPath = (...paths: string[]): string => {
+    return path.join(RESOURCES_PATH, ...paths);
+  };
+
+  // Create a simple 16x16 gray circle icon
+  const trayIconPath = getAssetPath("icons", "16x16.png");
+  
+  // Create native image and resize for tray
+  const icon = nativeImage.createFromPath(trayIconPath);
+  const trayIcon = icon.resize({ width: 16, height: 16 });
+
+  tray = new Tray(trayIcon);
+  tray.setToolTip("Posely - Posture Monitor");
+
+  // Create context menu for tray
+  const contextMenu = ElectronMenu.buildFromTemplate([
+    {
+      label: "Show Dashboard",
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      },
+    },
+    {
+      label: "Settings",
+      click: () => {
+        createSettingsWindow();
+      },
+    },
+    { type: "separator" },
+    {
+      label: "Quit",
+      click: () => {
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(contextMenu);
+
+  // On macOS, clicking the tray icon should show the main window
+  tray.on("click", () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.hide();
+      } else {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    }
+  });
+
+  logger.info("System tray icon created");
+  return tray;
+};
+
 ipcMain.on(IPC_CHANNELS.rendererPing, (event, arg) => {
   if (arg === "error") {
     throw new Error("Intentional Main Process Error");
@@ -306,6 +378,32 @@ ipcMain.handle(
     }
   },
 );
+
+ipcMain.handle(IPC_CHANNELS.openSettings, () => {
+  try {
+    createSettingsWindow();
+    return { success: true };
+  } catch (error) {
+    logger.error("Failed to open settings window", toErrorPayload(error));
+    return { success: false, error: String(error) };
+  }
+});
+
+ipcMain.handle(IPC_CHANNELS.reCalibrate, () => {
+  try {
+    // Close settings window if open
+    closeSettingsWindow();
+
+    // TODO: Trigger calibration flow from Story 1.2
+    // For now, just log that we received the request
+    logger.info("Re-calibration requested from settings");
+
+    return { success: true };
+  } catch (error) {
+    logger.error("Failed to trigger re-calibration", toErrorPayload(error));
+    return { success: false, error: String(error) };
+  }
+});
 
 const isDebug =
   process.env.NODE_ENV === "development" || process.env.DEBUG_PROD === "true";
@@ -495,6 +593,11 @@ app.on("before-quit", () => {
     });
     backgroundWorker = null;
   }
+  
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
 });
 
 app.on("window-all-closed", () => {
@@ -530,6 +633,7 @@ const onAppReady = async () => {
   }
 
   registerCalibrationHandler();
+  createTray();
   await createWindow();
   app.on("activate", () => {
     // On macOS it's common to re-create a window in the app when the

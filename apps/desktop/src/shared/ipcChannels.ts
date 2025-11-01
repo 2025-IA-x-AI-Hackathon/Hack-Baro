@@ -4,6 +4,8 @@ export const IPC_CHANNELS = {
   workerStatus: "worker:status",
   workerResponse: "worker:response",
   calibrationRequest: "calibration:request",
+  reCalibrate: "calibration:re-calibrate",
+  openSettings: "settings:open",
   TRIGGER_MAIN_ERROR: "error:trigger-main",
   TRIGGER_WORKER_ERROR: "error:trigger-worker",
   REQUEST_CAMERA_PERMISSION: "camera:request-permission",
