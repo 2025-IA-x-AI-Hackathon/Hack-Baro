@@ -4,12 +4,11 @@ import { createOnnxDetector } from "./onnxDetector";
 
 const createDetector = (kind: DetectorKind): Detector => {
   switch (kind) {
-    case "mediapipe":
-      return createMediapipeDetector();
     case "onnx":
       return createOnnxDetector();
+    case "mediapipe":
     default:
-      throw new Error(`Unknown detector kind: ${kind as string}`);
+      return createMediapipeDetector();
   }
 };
 
