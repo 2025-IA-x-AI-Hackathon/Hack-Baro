@@ -1,21 +1,21 @@
 import {
-  captureException as sentryCaptureException,
   init as initSentry,
+  captureException as sentryCaptureException,
   setContext,
   setTag,
-} from '@sentry/node';
-import type { NodeOptions } from '@sentry/node';
-import { monitoringConfig } from '../shared/config/monitoring';
-import { getLogger } from '../shared/logger';
+} from "@sentry/node";
+import type { NodeOptions } from "@sentry/node";
+import { monitoringConfig } from "../shared/config/monitoring";
+import { getLogger } from "../shared/logger";
 
-const logger = getLogger('sentry-worker', 'worker');
+const logger = getLogger("sentry-worker", "worker");
 
 let workerInitialised = false;
 
 export const initWorkerSentry = () => {
   if (!monitoringConfig.sentry.enabled || workerInitialised) {
     if (!monitoringConfig.sentry.enabled) {
-      logger.debug('Worker Sentry disabled by configuration');
+      logger.debug("Worker Sentry disabled by configuration");
     }
     return;
   }
@@ -25,13 +25,13 @@ export const initWorkerSentry = () => {
     environment: monitoringConfig.environment,
     release: monitoringConfig.release,
     beforeSend: monitoringConfig.sentry.beforeSend as NonNullable<
-      NodeOptions['beforeSend']
+      NodeOptions["beforeSend"]
     >,
     tracesSampleRate: monitoringConfig.sentry.tracesSampleRate,
   });
 
-  setTag('process', 'worker');
-  setContext('worker', {
+  setTag("process", "worker");
+  setContext("worker", {
     pid: process.pid,
     platform: process.platform,
   });
@@ -51,31 +51,31 @@ export const captureWorkerException = (error: unknown) => {
 };
 
 export const registerWorkerHandlers = () => {
-  process.on('uncaughtException', (error) => {
-    logger.fatal('Uncaught exception in worker', {
+  process.on("uncaughtException", (error) => {
+    logger.fatal("Uncaught exception in worker", {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     });
     captureWorkerException(error);
   });
 
-  process.on('unhandledRejection', (reason) => {
+  process.on("unhandledRejection", (reason) => {
     const fallbackMessage = (() => {
       if (reason instanceof Error) {
         return reason.message;
       }
-      if (typeof reason === 'string') {
+      if (typeof reason === "string") {
         return reason;
       }
       try {
         return JSON.stringify(reason);
       } catch {
-        return 'unknown';
+        return "unknown";
       }
     })();
 
     const error = reason instanceof Error ? reason : new Error(fallbackMessage);
-    logger.fatal('Unhandled rejection in worker', {
+    logger.fatal("Unhandled rejection in worker", {
       error: error.message,
       stack: error.stack,
     });
