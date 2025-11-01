@@ -422,5 +422,43 @@ describe("DailyPostureRepository", () => {
 
       expect(result).toBe(30);
     });
+
+    it("should break streak when there's a gap in dates (missing day)", async () => {
+      const { calculateStreak } = await import("../dailyPostureRepository.js");
+      
+      const mockData = [
+        {
+          id: 4,
+          date: "2025-11-02",
+          avgScore: 80.0,
+          meetsGoal: 1,
+        },
+        {
+          id: 3,
+          date: "2025-11-01",
+          avgScore: 75.0,
+          meetsGoal: 1,
+        },
+        // Missing 2025-10-31 (gap in dates)
+        {
+          id: 2,
+          date: "2025-10-30",
+          avgScore: 85.0,
+          meetsGoal: 1,
+        },
+        {
+          id: 1,
+          date: "2025-10-29",
+          avgScore: 90.0,
+          meetsGoal: 1,
+        },
+      ];
+
+      (mockDb.all as any).mockReturnValueOnce(mockData);
+
+      const result = calculateStreak();
+
+      expect(result).toBe(2); // Should only count 11-02 and 11-01, break at gap
+    });
   });
 });
