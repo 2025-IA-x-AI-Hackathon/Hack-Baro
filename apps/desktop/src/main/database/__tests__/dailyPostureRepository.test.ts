@@ -35,6 +35,8 @@ describe("DailyPostureRepository", () => {
       returning: vi.fn().mockReturnThis(),
       update: vi.fn().mockReturnThis(),
       set: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockReturnThis(),
+      all: vi.fn(),
     } as any;
 
     const clientModule = await import("../client.js");
@@ -147,6 +149,84 @@ describe("DailyPostureRepository", () => {
       const result = getDailyPostureLogByDate("2025-11-02");
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe("getWeeklySummary", () => {
+    it("should return records for the last 7 days", async () => {
+      const { getWeeklySummary } = await import("../dailyPostureRepository.js");
+      
+      const today = new Date();
+      const mockData = [
+        {
+          id: 1,
+          date: new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]!,
+          secondsInGreen: 100,
+          secondsInYellow: 50,
+          secondsInRed: 10,
+          avgScore: 85.0,
+          sampleCount: 160,
+        },
+        {
+          id: 2,
+          date: new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]!,
+          secondsInGreen: 120,
+          secondsInYellow: 40,
+          secondsInRed: 5,
+          avgScore: 88.0,
+          sampleCount: 165,
+        },
+        {
+          id: 3,
+          date: today.toISOString().split("T")[0]!,
+          secondsInGreen: 90,
+          secondsInYellow: 60,
+          secondsInRed: 15,
+          avgScore: 82.0,
+          sampleCount: 165,
+        },
+      ];
+
+      (mockDb.all as any).mockReturnValueOnce(mockData);
+
+      const result = getWeeklySummary();
+
+      expect(result).toEqual(mockData);
+      expect(mockDb.select).toHaveBeenCalled();
+    });
+
+    it("should return empty array when no data exists", async () => {
+      const { getWeeklySummary } = await import("../dailyPostureRepository.js");
+      
+      (mockDb.all as any).mockReturnValueOnce([]);
+
+      const result = getWeeklySummary();
+
+      expect(result).toEqual([]);
+    });
+
+    it("should handle partial week data", async () => {
+      const { getWeeklySummary } = await import("../dailyPostureRepository.js");
+      
+      const today = new Date();
+      const mockData = [
+        {
+          id: 1,
+          date: today.toISOString().split("T")[0]!,
+          secondsInGreen: 90,
+          secondsInYellow: 60,
+          secondsInRed: 15,
+          avgScore: 82.0,
+          sampleCount: 165,
+        },
+      ];
+
+      (mockDb.all as any).mockReturnValueOnce(mockData);
+
+      const result = getWeeklySummary();
+
+      expect(result).toEqual(mockData);
+      expect(result.length).toBe(1);
     });
   });
 });
