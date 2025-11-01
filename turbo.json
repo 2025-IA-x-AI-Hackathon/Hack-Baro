@@ -15,6 +15,10 @@
     "SENTRY_TRACES_SAMPLE_RATE",
     "START_MINIMIZED",
     "UPGRADE_EXTENSIONS",
+    "ENABLE_DEVTOOLS_EXTENSIONS",
+    "ELECTRON_SANDBOX",
+    "PREFER_CONTINUITY_CAMERA",
+    "DEVTOOLS_OPEN_ON_FALLBACK",
     "npm_package_version"
   ],
   "globalDependencies": ["pnpm-lock.yaml"],
