@@ -8,6 +8,10 @@ export const IPC_CHANNELS = {
   TRIGGER_WORKER_ERROR: "error:trigger-worker",
   REQUEST_CAMERA_PERMISSION: "camera:request-permission",
   OPEN_CAMERA_SETTINGS: "camera:open-settings",
+  getSetting: "settings:get",
+  setSetting: "settings:set",
+  requestCameraPermission: "camera:request-permission",
+  openCameraPrivacySettings: "system:open-camera-privacy-settings",
 } as const;
 
 export type RendererChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

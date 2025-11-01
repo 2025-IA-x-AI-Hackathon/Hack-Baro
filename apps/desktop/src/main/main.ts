@@ -21,6 +21,7 @@ import {
   openCameraSettings,
   requestCameraPermission,
 } from "./cameraPermissions";
+import { getSetting, setSetting } from "./database/settingsRepository";
 import registerCalibrationHandler from "./ipc/calibrationHandler";
 import MenuBuilder from "./menu";
 import { captureException } from "./sentry";
@@ -274,6 +275,38 @@ if (process.env.NODE_ENV === "production") {
     });
 }
 
+ipcMain.handle(IPC_CHANNELS.getSetting, (_event, key: string) => {
+  try {
+    return getSetting(key);
+  } catch (error) {
+    logger.error("Failed to get setting", toErrorPayload(error));
+    return null;
+  }
+});
+
+ipcMain.handle(
+  IPC_CHANNELS.setSetting,
+  (_event, key: string, value: string) => {
+    try {
+      setSetting(key, value);
+
+      // Handle launch at startup setting
+      if (key === "launchAtStartup") {
+        const enabled = value === "true";
+        app.setLoginItemSettings({
+          openAtLogin: enabled,
+        });
+        logger.info(`Launch at startup ${enabled ? "enabled" : "disabled"}`);
+      }
+
+      return { success: true };
+    } catch (error) {
+      logger.error("Failed to set setting", toErrorPayload(error));
+      return { success: false, error: String(error) };
+    }
+  },
+);
+
 const isDebug =
   process.env.NODE_ENV === "development" || process.env.DEBUG_PROD === "true";
 
@@ -297,6 +330,20 @@ if (isDebug) {
 }
 
 const createWindow = async () => {
+  // Check if onboarding has been completed
+  const onboardingCompleted = getSetting("onboardingCompleted");
+  logger.debug("Onboarding check", {
+    onboardingCompleted,
+    type: typeof onboardingCompleted,
+  });
+  const shouldShowOnboarding = onboardingCompleted !== "true";
+
+  if (shouldShowOnboarding) {
+    logger.info("First launch detected, showing onboarding wizard");
+  } else {
+    logger.info("Onboarding completed, starting app normally");
+  }
+
   if (shouldInstallDevtoolsExtensions) {
     await installExtensions();
   } else if (isDebug) {
@@ -332,6 +379,10 @@ const createWindow = async () => {
     },
   });
 
+  if (shouldShowOnboarding) {
+    // Load onboarding page
+  }
+
   // Build URL and pass dev-time feature flags to renderer via query params
   const baseUrl = resolveHtmlPath("index.html");
   const url = new URL(baseUrl);
@@ -339,7 +390,9 @@ const createWindow = async () => {
     url.searchParams.set("preferContinuityCamera", "1");
   }
 
-  await mainWindow.loadURL(url.toString());
+  mainWindow.loadURL(url.toString()).catch((error: unknown) => {
+    logger.error("Failed to load main window URL", toErrorPayload(error));
+  });
 
   mainWindow.webContents.once("did-finish-load", () => {
     flushPendingWorkerMessages();
@@ -467,6 +520,15 @@ const onAppReady = async () => {
     }
   }
   startWorker();
+  try {
+    const { initializeDatabase } = await import("./database/client.js");
+    initializeDatabase();
+    logger.info("Database initialized successfully");
+  } catch (error: unknown) {
+    logger.error("Failed to initialize database", toErrorPayload(error));
+    throw error;
+  }
+
   registerCalibrationHandler();
   await createWindow();
   app.on("activate", () => {

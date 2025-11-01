@@ -14,5 +14,7 @@
     "postinstall": "node -r ts-node/register ../../.erb/scripts/electron-rebuild.js && node -r ts-node/register ../../.erb/scripts/link-modules.ts",
     "link-modules": "node -r ts-node/register ../../.erb/scripts/link-modules.ts"
   },
-  "dependencies": {}
+  "dependencies": {
+    "better-sqlite3": "^12.4.1"
+  }
 }

@@ -92,6 +92,29 @@ const compatConfigNormalized = compat.extends("erb").map(normalizePlugins);
 
 export default [
   {
+    ignores: [
+      "**/logs/**",
+      "**/*.log",
+      "**/pids/**",
+      "**/*.pid",
+      "**/*.seed",
+      "**/coverage/**",
+      "**/.eslintcache",
+      "**/node_modules/**",
+      "**/.DS_Store",
+      "**/dist/**",
+      "**/release/**",
+      "**/.erb/dll/**",
+      "**/.erb/configs/**",
+      "**/.idea/**",
+      "**/npm-debug.log.*",
+      "**/*.css.d.ts",
+      "**/*.sass.d.ts",
+      "**/*.scss.d.ts",
+      "**/vitest.config.mts",
+    ],
+  },
+  {
     plugins: {
       "@typescript-eslint": eslintPluginTypescript,
     },
@@ -210,28 +233,6 @@ export default [
       "@typescript-eslint/no-array-delete": "off",
       "@typescript-eslint/no-base-to-string": "off",
     },
-  },
-  {
-    ignores: [
-      "logs/**",
-      "*.log",
-      "pids/**",
-      "*.pid",
-      "*.seed",
-      "coverage/**",
-      ".eslintcache",
-      "node_modules/**",
-      ".DS_Store",
-      "dist/**",
-      "release/**",
-      ".erb/dll/**",
-      ".idea/**",
-      "npm-debug.log.*",
-      "*.css.d.ts",
-      "*.sass.d.ts",
-      "*.scss.d.ts",
-      "vitest.config.mts",
-    ],
   },
   {
     files: ["eslint.config.mjs"],
