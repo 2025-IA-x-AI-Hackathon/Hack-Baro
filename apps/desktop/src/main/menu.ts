@@ -6,7 +6,7 @@ import {
   shell,
 } from "electron";
 import { autoUpdater } from "electron-updater";
-import { getLogger } from "../shared/logger";
+import { getLogger, toErrorPayload } from "../shared/logger";
 
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
   selector?: string;
@@ -14,11 +14,8 @@ interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
 }
 
 const APP_NAME = "Posely";
-const logger = getLogger("app-menu", "main");
-const toErrorPayload = (error: unknown) => ({
-  error: error instanceof Error ? error.message : String(error),
-  stack: error instanceof Error ? error.stack : undefined,
-});
+
+const logger = getLogger("menu", "main");
 
 export default class MenuBuilder {
   mainWindow: BrowserWindow;
@@ -75,7 +72,7 @@ export default class MenuBuilder {
           click: () => {
             autoUpdater.checkForUpdatesAndNotify().catch((error: unknown) => {
               logger.warn("Failed to check for updates from menu", {
-                context: "darwin:app-menu",
+                context: "darwin:menu",
                 ...toErrorPayload(error),
               });
             });
@@ -129,6 +126,22 @@ export default class MenuBuilder {
           accelerator: "Command+R",
           click: () => {
             this.mainWindow.webContents.reload();
+          },
+        },
+        {
+          label: "Toggle Debug Overlay",
+          accelerator: "Command+Shift+M",
+          click: () => {
+            this.mainWindow.webContents
+              .executeJavaScript(
+                "window.togglePoselyMetricsOverlay && window.togglePoselyMetricsOverlay();",
+              )
+              .catch((error) => {
+                logger.warn(
+                  "Failed to toggle debug overlay",
+                  toErrorPayload(error),
+                );
+              });
           },
         },
         {
@@ -201,6 +214,21 @@ export default class MenuBuilder {
               });
           },
         },
+        {
+          label: "Report an Issue",
+          click() {
+            shell
+              .openExternal(
+                "https://github.com/2025-IA-x-AI-Hackathon/Hack-Baro/issues",
+              )
+              .catch((error: unknown) => {
+                logger.warn("Failed to open issue tracker from menu", {
+                  context: "darwin:help-menu",
+                  ...toErrorPayload(error),
+                });
+              });
+          },
+        },
       ],
     };
 
@@ -253,6 +281,22 @@ export default class MenuBuilder {
                   accelerator: "Ctrl+R",
                   click: () => {
                     this.mainWindow.webContents.reload();
+                  },
+                },
+                {
+                  label: "Toggle Debug Overlay",
+                  accelerator: "Ctrl+Shift+M",
+                  click: () => {
+                    this.mainWindow.webContents
+                      .executeJavaScript(
+                        "window.togglePoselyMetricsOverlay && window.togglePoselyMetricsOverlay();",
+                      )
+                      .catch((error) => {
+                        logger.warn(
+                          "Failed to toggle debug overlay",
+                          toErrorPayload(error),
+                        );
+                      });
                   },
                 },
                 {
@@ -309,6 +353,21 @@ export default class MenuBuilder {
                 )
                 .catch((error: unknown) => {
                   logger.warn("Failed to open GitHub from menu", {
+                    context: "default:help-menu",
+                    ...toErrorPayload(error),
+                  });
+                });
+            },
+          },
+          {
+            label: "Report an Issue",
+            click() {
+              shell
+                .openExternal(
+                  "https://github.com/2025-IA-x-AI-Hackathon/Hack-Baro/issues",
+                )
+                .catch((error: unknown) => {
+                  logger.warn("Failed to open issue tracker from menu", {
                     context: "default:help-menu",
                     ...toErrorPayload(error),
                   });
