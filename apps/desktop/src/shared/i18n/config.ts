@@ -1,31 +1,30 @@
-import i18next, { type InitOptions } from 'i18next';
+import i18next, { type InitOptions } from "i18next";
 import LanguageDetector, {
   type DetectorOptions,
-} from 'i18next-browser-languagedetector';
-import { initReactI18next } from 'react-i18next';
+} from "i18next-browser-languagedetector";
+import { initReactI18next } from "react-i18next";
+import commonEn from "../../../locales/en-US/common.json";
+import errorsEn from "../../../locales/en-US/errors.json";
+import settingsEn from "../../../locales/en-US/settings.json";
+import commonKo from "../../../locales/ko-KR/common.json";
+import errorsKo from "../../../locales/ko-KR/errors.json";
+import settingsKo from "../../../locales/ko-KR/settings.json";
 
-import commonEn from '../../../locales/en-US/common.json';
-import errorsEn from '../../../locales/en-US/errors.json';
-import settingsEn from '../../../locales/en-US/settings.json';
-import commonKo from '../../../locales/ko-KR/common.json';
-import errorsKo from '../../../locales/ko-KR/errors.json';
-import settingsKo from '../../../locales/ko-KR/settings.json';
-
-export const LANGUAGE_STORAGE_KEY = 'baro.language';
-export const DEFAULT_LANGUAGE = 'ko-KR' as const;
-export const FALLBACK_LANGUAGE = 'en-US' as const;
+export const LANGUAGE_STORAGE_KEY = "baro.language";
+export const DEFAULT_LANGUAGE = "ko-KR" as const;
+export const FALLBACK_LANGUAGE = "en-US" as const;
 export const SUPPORTED_LANGUAGES = [
   DEFAULT_LANGUAGE,
   FALLBACK_LANGUAGE,
 ] as const;
 
 const resources = {
-  'en-US': {
+  "en-US": {
     common: commonEn,
     errors: errorsEn,
     settings: settingsEn,
   },
-  'ko-KR': {
+  "ko-KR": {
     common: commonKo,
     errors: errorsKo,
     settings: settingsKo,
@@ -35,8 +34,8 @@ const resources = {
 type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
 
 const detectionOptions: DetectorOptions = {
-  order: ['localStorage', 'navigator'],
-  caches: ['localStorage'],
+  order: ["localStorage", "navigator"],
+  caches: ["localStorage"],
   lookupLocalStorage: LANGUAGE_STORAGE_KEY,
 };
 
@@ -45,9 +44,9 @@ const initOptions: InitOptions = {
   supportedLngs: [...SUPPORTED_LANGUAGES],
   fallbackLng: FALLBACK_LANGUAGE,
   lng: DEFAULT_LANGUAGE,
-  ns: ['common', 'settings', 'errors'],
-  defaultNS: 'common',
-  keySeparator: '.',
+  ns: ["common", "settings", "errors"],
+  defaultNS: "common",
+  keySeparator: ".",
   interpolation: {
     escapeValue: false,
   },
@@ -63,7 +62,7 @@ export const isSupportedLanguage = (
   SUPPORTED_LANGUAGES.includes(language as SupportedLanguage);
 
 export const resolveInitialLanguage = (): SupportedLanguage => {
-  if (typeof window === 'undefined') {
+  if (typeof window === "undefined") {
     return DEFAULT_LANGUAGE;
   }
 
@@ -100,7 +99,7 @@ export const setLanguage = async (language: SupportedLanguage) => {
   }
 
   await i18next.changeLanguage(language);
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
   }
 };
