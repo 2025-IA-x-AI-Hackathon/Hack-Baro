@@ -15,6 +15,8 @@ import { EngineCoordinator } from "./engine";
 import { setGuardrailDebugEnabled } from "./guardrails/debug-flags";
 import "./sentry";
 
+const STREAK_THRESHOLD = 70;
+
 const port = parentPort;
 
 if (!port) {
@@ -109,6 +111,7 @@ const persistPostureData = () => {
   }
 
   const avgScore = postureAccumulator.scoreSum / postureAccumulator.sampleCount;
+  const meetsGoal = avgScore >= STREAK_THRESHOLD ? 1 : 0;
 
   const payload = {
     date: postureAccumulator.date,
@@ -117,6 +120,7 @@ const persistPostureData = () => {
     secondsInRed: Math.round(postureAccumulator.secondsInRed),
     avgScore: Math.round(avgScore * 100) / 100, // Round to 2 decimal places
     sampleCount: postureAccumulator.sampleCount,
+    meetsGoal,
   };
 
   logger.info("Persisting posture data", payload);
