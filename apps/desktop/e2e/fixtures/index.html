@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Posely E2E Harness</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+        background: #101827;
+        color: #f8fafc;
+        display: grid;
+        place-items: center;
+        height: 100vh;
+      }
+      main {
+        padding: 32px;
+        border-radius: 16px;
+        background: rgba(15, 118, 110, 0.1);
+        backdrop-filter: blur(6px);
+        box-shadow: 0 20px 45px rgba(15, 118, 110, 0.3);
+        min-width: 400px;
+      }
+      button {
+        margin-right: 12px;
+        padding: 8px 16px;
+        border-radius: 12px;
+        border: none;
+        font-weight: 600;
+        cursor: pointer;
+        background: #0ea5e9;
+        color: #0f172a;
+      }
+      dl {
+        margin-top: 20px;
+      }
+      dt {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: rgba(248, 250, 252, 0.7);
+      }
+      dd {
+        margin: 4px 0 12px;
+        font-size: 16px;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1 data-testid="app-ready">E2E Playground</h1>
+      <p data-testid="app-description">
+        Use the controls below to verify IPC communication between renderer and
+        main processes.
+      </p>
+      <div>
+        <button data-testid="ping-main" type="button">Ping Main</button>
+        <button data-testid="ping-worker" type="button">Ping Worker</button>
+      </div>
+      <dl>
+        <dt>Main response</dt>
+        <dd data-testid="main-response">waiting</dd>
+        <dt>Worker status</dt>
+        <dd data-testid="worker-status">waiting</dd>
+        <dt>Worker response</dt>
+        <dd data-testid="worker-response">waiting</dd>
+      </dl>
+    </main>
+    <script>
+      // Harness scripts are injected at runtime by the Playwright setup.
+    </script>
+  </body>
+</html>

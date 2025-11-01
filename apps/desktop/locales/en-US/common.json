@@ -1,0 +1,36 @@
+{
+  "actions": {
+    "pingMain": "Ping Main Process",
+    "pingWorker": "Ping Worker Thread",
+    "getStarted": "Get Started"
+  },
+  "app": {
+    "tagline": "Electron-React-Boilerplate is now integrated into the Turborepo workspace. Use the actions below to verify IPC and worker communication.",
+    "title": "Posely Desktop"
+  },
+  "cards": {
+    "documentation": {
+      "body": "Review the base project documentation that powers this desktop app.",
+      "title": "Electron React Boilerplate"
+    },
+    "turborepo": {
+      "body": "Desktop build, dev, and test scripts run through the shared Turbo pipeline.",
+      "title": "Turborepo Pipelines"
+    }
+  },
+  "languageSwitcher": {
+    "english": "English",
+    "korean": "Korean",
+    "label": "Language"
+  },
+  "status": {
+    "mainProcess": "Main Process",
+    "noPayload": "No payload received.",
+    "noWorkerResponse": "No worker response yet.",
+    "waitingForPing": "Waiting for ping…",
+    "waitingForWorker": "Waiting for worker response…",
+    "workerBooting": "Worker booting…",
+    "workerResponse": "Worker Response",
+    "workerStatus": "Worker Status"
+  }
+}

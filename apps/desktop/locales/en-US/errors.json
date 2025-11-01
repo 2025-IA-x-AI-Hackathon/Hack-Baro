@@ -1,0 +1,6 @@
+{
+  "ipc": {
+    "unavailableDescription": "IPC bridge could not be detected.",
+    "unavailableTitle": "Electron context unavailable"
+  }
+}

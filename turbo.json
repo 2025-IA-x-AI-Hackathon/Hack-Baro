@@ -1,0 +1,72 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "globalEnv": [
+    "NODE_ENV",
+    "BARO_SKIP_ELECTRON_BUILDER",
+    "CI",
+    "APP_ENV",
+    "POS_ENV",
+    "DESKTOP_ENV",
+    "DEBUG_PROD",
+    "SENTRY_DSN",
+    "BETTER_STACK_TOKEN",
+    "ENABLE_SENTRY_IN_DEV",
+    "ENABLE_BETTER_STACK_IN_DEV",
+    "SENTRY_TRACES_SAMPLE_RATE",
+    "START_MINIMIZED",
+    "UPGRADE_EXTENSIONS",
+    "npm_package_version"
+  ],
+  "globalDependencies": ["pnpm-lock.yaml"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build", "i18n:generate-types"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": ["dist/**", "build/**", ".next/**", "!.next/cache/**"]
+    },
+    "i18n:generate-types": {
+      "cache": true,
+      "inputs": ["$TURBO_DEFAULT$", "locales/**"],
+      "outputs": ["src/types/i18n.d.ts", "src/types/resources.d.ts"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "dependsOn": ["^lint"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "eslint.config.*",
+        "**/.eslintrc.*",
+        "tsconfig.json",
+        "tsconfig.*.json",
+        "packages/eslint-config/**"
+      ],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^test"],
+      "outputs": []
+    },
+    "test:e2e": {
+      "cache": false,
+      "dependsOn": ["^build"],
+      "outputs": [
+        "apps/desktop/e2e/test-results/**",
+        "apps/desktop/e2e/report/**"
+      ]
+    },
+    "type-check": {
+      "dependsOn": ["^type-check"],
+      "outputs": []
+    },
+    "clean": {
+      "cache": false
+    },
+    "format": {
+      "cache": false,
+      "outputs": []
+    }
+  }
+}

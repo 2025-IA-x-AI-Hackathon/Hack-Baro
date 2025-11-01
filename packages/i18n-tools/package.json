@@ -1,0 +1,19 @@
+{
+  "name": "@baro/i18n-tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "scan": "i18next-cli extract",
+    "types": "i18next-cli types",
+    "watch": "i18next-cli extract --watch"
+  },
+  "dependencies": {
+    "i18next": "^25.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.13.10",
+    "i18next-cli": "^1.10.4",
+    "typescript": "5.9.2"
+  }
+}

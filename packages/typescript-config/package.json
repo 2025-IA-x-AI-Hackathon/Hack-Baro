@@ -1,0 +1,16 @@
+{
+  "name": "@baro/typescript-config",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "echo \"no build step for typescript-config package\"",
+    "lint": "echo \"no lint step for typescript-config package\"",
+    "test": "echo \"no tests defined for typescript-config package\"",
+    "type-check": "echo \"no type checking for typescript-config package\"",
+    "clean": "rm -rf dist"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}
