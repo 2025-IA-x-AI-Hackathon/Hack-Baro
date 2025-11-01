@@ -97,7 +97,10 @@ const markAsCustom = (value: string): MessageState => ({
 
 function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
   const { t } = useTranslation(["common"]);
-  const channels = useMemo(() => electron.channels ?? IPC_CHANNELS, [electron]);
+  const channels = useMemo<ElectronHandler["channels"]>(
+    () => electron.channels ?? IPC_CHANNELS,
+    [electron],
+  );
   const { ipcRenderer } = electron;
 
   const [onboardingCompleted, setOnboardingCompleted] = useState<
@@ -173,12 +176,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
   const formatMs = useCallback((value?: number) => {
     return value === undefined ? "0.0" : value.toFixed(1);
   }, []);
-  const channels = useMemo<ElectronHandler["channels"]>(
-    () => electron.channels ?? IPC_CHANNELS,
-    [electron],
-  );
   const performanceModes = useMemo(() => listPerformanceModePresets(), []);
-  const { ipcRenderer } = electron;
 
   const defaults = useMemo(
     () => ({
