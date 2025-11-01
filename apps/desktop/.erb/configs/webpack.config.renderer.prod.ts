@@ -1,18 +1,20 @@
+/* eslint-disable */
 /**
  * Build config for electron renderer process
  */
-import CssMinimizerPlugin from "css-minimizer-webpack-plugin";
+
+import path from "path";
+import webpack from "webpack";
 import HtmlWebpackPlugin from "html-webpack-plugin";
 import MiniCssExtractPlugin from "mini-css-extract-plugin";
-import path from "path";
-import TerserPlugin from "terser-webpack-plugin";
-import webpack from "webpack";
 import { BundleAnalyzerPlugin } from "webpack-bundle-analyzer";
+import CssMinimizerPlugin from "css-minimizer-webpack-plugin";
 import { merge } from "webpack-merge";
+import TerserPlugin from "terser-webpack-plugin";
+import baseConfig, { SHARED_ENV_VARS } from "./webpack.config.base";
+import webpackPaths from "./webpack.paths";
 import checkNodeEnv from "../scripts/check-node-env";
 import deleteSourceMaps from "../scripts/delete-source-maps";
-import baseConfig from "./webpack.config.base";
-import webpackPaths from "./webpack.paths";
 
 checkNodeEnv("production");
 deleteSourceMaps();
@@ -112,6 +114,10 @@ const configuration: webpack.Configuration = {
           "file-loader",
         ],
       },
+      {
+        test: /\.(wasm|task|bin)$/i,
+        type: "asset/resource",
+      },
     ],
   },
 
@@ -133,6 +139,7 @@ const configuration: webpack.Configuration = {
     new webpack.EnvironmentPlugin({
       NODE_ENV: "production",
       DEBUG_PROD: false,
+      ...SHARED_ENV_VARS,
     }),
 
     new MiniCssExtractPlugin({
@@ -157,7 +164,7 @@ const configuration: webpack.Configuration = {
     }),
 
     new webpack.DefinePlugin({
-      "process.type": '"renderer"',
+      "process.type": "'renderer'",
     }),
   ],
 };
