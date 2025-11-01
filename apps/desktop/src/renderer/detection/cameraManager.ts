@@ -21,6 +21,8 @@ export class CameraManager {
 
   private isReady = false;
 
+  private previewVisible = false;
+
   async initialise({
     idealWidth = 640,
     idealHeight = 480,
@@ -102,11 +104,13 @@ export class CameraManager {
     });
 
     this.videoElement = video;
-    logger.info("Camera stream initialised", {
+    logger.info("Camera stream initialized", {
       width: video.videoWidth,
       height: video.videoHeight,
       frameRate: idealFrameRate,
     });
+
+    this.applyPreviewVisibility();
 
     // Optionally switch to Continuity Camera if available and preferred
     const preferContinuityEffective =
@@ -136,7 +140,7 @@ export class CameraManager {
 
   async captureFrame(): Promise<ImageBitmap> {
     if (!this.videoElement || !this.isReady) {
-      throw new Error("Camera is not initialised");
+      throw new Error("Camera is not initialized");
     }
 
     return createImageBitmap(this.videoElement);
@@ -162,6 +166,44 @@ export class CameraManager {
     }
 
     this.isReady = false;
+    this.previewVisible = false;
+  }
+
+  setPreviewVisibility(visible: boolean): void {
+    this.previewVisible = visible;
+    this.applyPreviewVisibility();
+  }
+
+  private applyPreviewVisibility(): void {
+    const video = this.videoElement;
+    if (!video) {
+      return;
+    }
+
+    if (this.previewVisible) {
+      video.style.opacity = "1";
+      video.style.pointerEvents = "none";
+      video.style.bottom = "16px";
+      video.style.right = "16px";
+      video.style.top = "";
+      video.style.left = "";
+      video.style.zIndex = "9998";
+      video.style.maxWidth = "360px";
+      video.style.maxHeight = "240px";
+      video.style.width = "320px";
+      video.style.height = "240px";
+      video.style.borderRadius = "12px";
+      video.style.border = "2px solid rgba(255, 255, 255, 0.4)";
+      video.style.boxShadow = "0 12px 24px rgba(0, 0, 0, 0.35)";
+      video.style.backgroundColor = "#000";
+    } else {
+      video.style.opacity = "0";
+      video.style.pointerEvents = "none";
+      video.style.border = "";
+      video.style.boxShadow = "";
+      video.style.width = "";
+      video.style.height = "";
+    }
   }
 
   private async trySwitchToContinuity(
