@@ -48,7 +48,7 @@
     "build:main": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true NODE_OPTIONS=\"-r ts-node/register --no-warnings\" webpack --config ./.erb/configs/webpack.config.main.prod.ts",
     "build:renderer": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true NODE_OPTIONS=\"-r ts-node/register --no-warnings\" webpack --config ./.erb/configs/webpack.config.renderer.prod.ts",
     "postinstall": "node ./.erb/scripts/postinstall.js",
-    "lint": "cross-env NODE_ENV=development eslint .",
+    "lint": "cross-env NODE_ENV=development eslint . --format=json --max-warnings=0 | node -e \"const data = JSON.parse(require('fs').readFileSync(0, 'utf-8')); const total = data.reduce((sum, file) => sum + file.errorCount + file.warningCount, 0); if (total > 0) { console.log(total + ' problems found'); process.exit(1); } else { console.log('No problems found'); }\"",
     "lint:fix": "cross-env NODE_ENV=development eslint . --fix",
     "package": "ts-node ./.erb/scripts/clean.js dist && pnpm run build && electron-builder build --publish never && pnpm run build:dll",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
