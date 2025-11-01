@@ -141,4 +141,3 @@ The script runs automatically during `pnpm build` and is enforced by the pre-com
 - [`apps/desktop/INTEGRATION.md`](apps/desktop/INTEGRATION.md) – ERB integration notes and upgrade considerations.
 
 Contribute improvements by updating the relevant document and referencing the story that introduced the change.
-# Hack-Baro
