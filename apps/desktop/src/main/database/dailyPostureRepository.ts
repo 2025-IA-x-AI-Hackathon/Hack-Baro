@@ -1,4 +1,4 @@
-import { eq, gte, lte, and, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getLogger } from "../../shared/logger";
 import { getDatabase } from "./client";
 import {
