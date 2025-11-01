@@ -1,4 +1,4 @@
-export const DETECTION_WORKER_URL = new URL(
-  "../../worker/inference-worker.ts",
-  import.meta.url,
-).toString();
+export const createDetectionWorker = () =>
+  new Worker(new URL("../../worker/inference-worker.ts", import.meta.url), {
+    type: "module",
+  });
