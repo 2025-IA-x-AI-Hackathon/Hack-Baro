@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, gte, lte, and, sql } from "drizzle-orm";
 import { getLogger } from "../../shared/logger";
 import { getDatabase } from "./client";
 import {
@@ -87,6 +87,42 @@ export const getDailyPostureLogByDate = (
   } catch (error) {
     logger.error(
       `Failed to get daily posture log for date ${date}: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`,
+    );
+    throw error;
+  }
+};
+
+export const getWeeklySummary = (): DailyPostureLogRow[] => {
+  const db = getDatabase();
+
+  try {
+    // Calculate date 7 days ago
+    const today = new Date();
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(today.getDate() - 6); // -6 to include today (7 days total)
+
+    const startDate = sevenDaysAgo.toISOString().split("T")[0]!;
+    const endDate = today.toISOString().split("T")[0]!;
+
+    // Query all records from the last 7 days, ordered by date ascending
+    const results = db
+      .select()
+      .from(dailyPostureLogs)
+      .where(
+        sql`${dailyPostureLogs.date} >= ${startDate} AND ${dailyPostureLogs.date} <= ${endDate}`
+      )
+      .orderBy(dailyPostureLogs.date)
+      .all();
+
+    logger.info(
+      `Retrieved ${results.length} records for weekly summary (${startDate} to ${endDate})`,
+    );
+    return results;
+  } catch (error) {
+    logger.error(
+      `Failed to get weekly summary: ${
         error instanceof Error ? error.message : "Unknown error"
       }`,
     );
