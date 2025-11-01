@@ -50,6 +50,9 @@ import {
   closeSettingsWindow,
   createSettingsWindow,
 } from "./windows/settingsWindow";
+import {
+  createDashboardWindow,
+} from "./windows/dashboardWindow";
 
 dotenvExpand.expand(dotenv.config());
 
@@ -404,10 +407,7 @@ const buildTrayMenu = (): Electron.Menu => {
     {
       label: "Show Dashboard",
       click: () => {
-        if (mainWindow) {
-          mainWindow.show();
-          mainWindow.focus();
-        }
+        createDashboardWindow();
       },
     },
     {
