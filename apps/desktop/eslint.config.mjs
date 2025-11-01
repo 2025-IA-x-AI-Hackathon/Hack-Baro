@@ -225,6 +225,7 @@ export default [
       "dist/**",
       "release/**",
       ".erb/dll/**",
+      ".erb/configs/**",
       ".idea/**",
       "npm-debug.log.*",
       "*.css.d.ts",
