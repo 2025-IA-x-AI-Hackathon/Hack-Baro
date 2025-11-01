@@ -29,13 +29,19 @@ describe("SentryErrorBoundary", () => {
     expect(screen.getByText("Something went wrong")).toBeInTheDocument();
   });
 
-  it("respects custom fallback content", () => {
+  it("shows development error UI in non-production environments", () => {
     render(
       <SentryErrorBoundary fallback={<div>custom fallback</div>}>
         <Thrower />
       </SentryErrorBoundary>,
     );
 
-    expect(screen.getByText("custom fallback")).toBeInTheDocument();
+    // In development/test environment, always shows the detailed error UI
+    expect(screen.getByText("Something went wrong")).toBeInTheDocument();
+    // Verify the error boundary dev UI is present (not the custom fallback)
+    expect(screen.queryByText("custom fallback")).not.toBeInTheDocument();
+    // Verify the dev UI container is present
+    const errorBoundary = document.querySelector(".renderer-error-boundary");
+    expect(errorBoundary).toBeInTheDocument();
   });
 });
