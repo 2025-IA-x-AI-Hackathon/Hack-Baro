@@ -40,7 +40,7 @@ export class DetectionWorkerBridge {
     error: new Set(),
   };
 
-  private isinitialized = false;
+  private isInitialised = false;
 
   private pendingInitialise: Promise<void> | null = null;
 
@@ -61,7 +61,7 @@ export class DetectionWorkerBridge {
 
           switch (message.type) {
             case "ready":
-              this.isinitialized = true;
+              this.isInitialised = true;
               this.busy = false;
               this.emit("ready", message.payload);
               break;
@@ -136,7 +136,7 @@ export class DetectionWorkerBridge {
   }
 
   initialise(payload: InitPayload): Promise<void> {
-    if (this.isinitialized) {
+    if (this.isInitialised) {
       return Promise.resolve();
     }
 
@@ -170,7 +170,7 @@ export class DetectionWorkerBridge {
   }
 
   isReady(): boolean {
-    return this.isinitialized;
+    return this.isInitialised;
   }
 
   isBusy(): boolean {
@@ -188,7 +188,7 @@ export class DetectionWorkerBridge {
 
   processFrame(bitmap: ImageBitmap, metadata: FrameMetadata): void {
     if (!this.worker) {
-      throw new Error("Worker has not been initialized");
+      throw new Error("Worker has not been initialised");
     }
     this.busy = true;
     const message: InferenceWorkerInboundMessage = {
@@ -212,7 +212,7 @@ export class DetectionWorkerBridge {
     } satisfies InferenceWorkerInboundMessage);
     this.worker.terminate();
     this.worker = null;
-    this.isinitialized = false;
+    this.isInitialised = false;
     this.busy = false;
   }
 }

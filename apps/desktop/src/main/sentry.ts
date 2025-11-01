@@ -6,7 +6,7 @@ import { getLogger } from "../shared/logger";
 
 const logger = getLogger("sentry-main", "main");
 
-let isinitialized = false;
+let isInitialised = false;
 
 const buildDefaultBreadcrumb = (message: string): Breadcrumb => ({
   timestamp: Date.now() / 1000,
@@ -19,7 +19,7 @@ export const captureException = (
   error: unknown,
   context?: Record<string, unknown>,
 ) => {
-  if (!isinitialized || !monitoringConfig.sentry.enabled) {
+  if (!isInitialised || !monitoringConfig.sentry.enabled) {
     return;
   }
 
@@ -29,7 +29,7 @@ export const captureException = (
 };
 
 export const captureMessage = (message: string) => {
-  if (!isinitialized || !monitoringConfig.sentry.enabled) {
+  if (!isInitialised || !monitoringConfig.sentry.enabled) {
     return;
   }
 
@@ -53,7 +53,7 @@ const resolveReasonMessage = (reason: unknown): string => {
 };
 
 const initSentry = () => {
-  if (!monitoringConfig.sentry.enabled || isinitialized) {
+  if (!monitoringConfig.sentry.enabled || isInitialised) {
     if (!monitoringConfig.sentry.enabled) {
       logger.debug("Skipping Sentry initialisation: disabled by configuration");
     }
@@ -85,7 +85,7 @@ const initSentry = () => {
     buildDefaultBreadcrumb("Sentry initialised for Electron main process"),
   );
 
-  isinitialized = true;
+  isInitialised = true;
 
   process.on("uncaughtException", (error) => {
     logger.fatal("Uncaught exception in main process", {
