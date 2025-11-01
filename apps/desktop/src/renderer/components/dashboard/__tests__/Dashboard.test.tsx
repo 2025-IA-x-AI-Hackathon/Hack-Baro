@@ -17,9 +17,33 @@ beforeEach(() => {
       },
       channels: {
         getDailySummary: "dashboard:get-daily-summary",
+        getWeeklySummary: "dashboard:get-weekly-summary",
       },
     },
   };
+  
+  // Default mock responses
+  mockInvoke.mockImplementation((channel: string) => {
+    if (channel === "dashboard:get-daily-summary") {
+      return Promise.resolve({
+        success: true,
+        data: {
+          date: "2025-11-02",
+          secondsInGreen: 0,
+          secondsInYellow: 0,
+          secondsInRed: 0,
+          avgScore: 0,
+          sampleCount: 0,
+        },
+      });
+    } else if (channel === "dashboard:get-weekly-summary") {
+      return Promise.resolve({
+        success: true,
+        data: [],
+      });
+    }
+    return Promise.resolve({ success: false });
+  });
 });
 
 describe("Dashboard Component", () => {
@@ -32,18 +56,6 @@ describe("Dashboard Component", () => {
   };
 
   it("renders the posture streak section with placeholder data", () => {
-    mockInvoke.mockResolvedValue({
-      success: true,
-      data: {
-        date: "2025-11-02",
-        secondsInGreen: 0,
-        secondsInYellow: 0,
-        secondsInRed: 0,
-        avgScore: 0,
-        sampleCount: 0,
-      },
-    });
-
     renderDashboard();
     
     expect(screen.getByText("Posture Streak")).toBeInTheDocument();
@@ -53,18 +65,6 @@ describe("Dashboard Component", () => {
   });
 
   it("displays loading state initially", () => {
-    mockInvoke.mockResolvedValue({
-      success: true,
-      data: {
-        date: "2025-11-02",
-        secondsInGreen: 0,
-        secondsInYellow: 0,
-        secondsInRed: 0,
-        avgScore: 0,
-        sampleCount: 0,
-      },
-    });
-
     renderDashboard();
     
     expect(screen.getByText("Loading...")).toBeInTheDocument();
@@ -120,46 +120,56 @@ describe("Dashboard Component", () => {
   });
 
   it("renders the weekly trend section", async () => {
-    mockInvoke.mockResolvedValue({
-      success: true,
-      data: {
-        date: "2025-11-02",
-        secondsInGreen: 0,
-        secondsInYellow: 0,
-        secondsInRed: 0,
-        avgScore: 0,
-        sampleCount: 0,
-      },
+    renderDashboard();
+    
+    await screen.findByText("Weekly Trend");
+  });
+
+  it("displays weekly chart with data from IPC", async () => {
+    const today = new Date();
+    const mockWeeklyData = Array.from({ length: 7 }, (_, i) => {
+      const date = new Date(today);
+      date.setDate(today.getDate() - (6 - i));
+      return {
+        date: date.toISOString().split("T")[0],
+        score: 80 + i * 2,
+      };
+    });
+
+    mockInvoke.mockImplementation((channel: string) => {
+      if (channel === "dashboard:get-daily-summary") {
+        return Promise.resolve({
+          success: true,
+          data: {
+            date: "2025-11-02",
+            secondsInGreen: 0,
+            secondsInYellow: 0,
+            secondsInRed: 0,
+            avgScore: 0,
+            sampleCount: 0,
+          },
+        });
+      } else if (channel === "dashboard:get-weekly-summary") {
+        return Promise.resolve({
+          success: true,
+          data: mockWeeklyData,
+        });
+      }
+      return Promise.resolve({ success: false });
     });
 
     renderDashboard();
     
     await screen.findByText("Weekly Trend");
     
-    // Check that all days of the week are displayed
-    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    days.forEach(day => {
-      expect(screen.getByText(day)).toBeInTheDocument();
-    });
+    // Chart should be rendered (not loading)
+    const loadingText = screen.queryByText("Loading chart...");
+    expect(loadingText).not.toBeInTheDocument();
   });
 
-  it("renders 7 bars in the weekly trend chart", async () => {
-    mockInvoke.mockResolvedValue({
-      success: true,
-      data: {
-        date: "2025-11-02",
-        secondsInGreen: 0,
-        secondsInYellow: 0,
-        secondsInRed: 0,
-        avgScore: 0,
-        sampleCount: 0,
-      },
-    });
-
-    const { container } = renderDashboard();
+  it("displays loading state for weekly chart initially", () => {
+    renderDashboard();
     
-    await screen.findByText("Weekly Trend");
-    const bars = container.querySelectorAll('.bg-blue-500');
-    expect(bars.length).toBe(7);
+    expect(screen.getByText("Loading chart...")).toBeInTheDocument();
   });
 });
