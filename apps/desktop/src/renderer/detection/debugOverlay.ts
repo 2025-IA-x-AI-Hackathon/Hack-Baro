@@ -98,22 +98,29 @@ const renderOverlay = () => {
   const timestamp = new Date(sample.timestamp).toLocaleTimeString();
   const header = `Frame: ${sample.frameId ?? "—"}  @ ${timestamp}`;
   const baseline = `Baseline face size: ${formatNumber(sample.baseline)}`;
+  const reliabilityReasonsArr = Array.isArray(sample.reliabilityReasons)
+    ? sample.reliabilityReasons
+    : [];
   const reliabilityReasons =
-    sample.reliabilityReasons.length > 0
-      ? sample.reliabilityReasons.join(", ")
-      : "—";
-  const headPoseSource = sample.metrics.pitch.source;
+    reliabilityReasonsArr.length > 0 ? reliabilityReasonsArr.join(", ") : "—";
+  const metrics = sample.metrics ?? ({} as Record<MetricKeys, MetricSnapshot>);
+  const headPoseSource = metrics?.pitch?.source ?? "unknown";
   const status = `Reliability: ${sample.reliability}  |  Reasons: ${reliabilityReasons}  |  HeadPose: ${headPoseSource}`;
   const confidenceLine = `Conf: face=${formatNumber(sample.faceConfidence)}  pose=${formatNumber(sample.poseConfidence)}  illum=${formatNumber(sample.illuminationConfidence)}`;
   const flags = `Presence: ${sample.presence}\n${confidenceLine}\nYaw de-weighted: ${sample.yawDeweighted ? "YES" : "NO"}  |  Low confidence: ${sample.lowConfidence ? "YES" : "NO"}  |  DPR baseline pending: ${sample.baselinePending ? "YES" : "NO"}`;
 
-  const metricRows = (Object.keys(sample.metrics) as MetricKeys[])
+  const metricKeys = metrics ? (Object.keys(metrics) as MetricKeys[]) : [];
+  const metricRows = metricKeys
     .map((key) => {
-      const metric = sample.metrics[key];
+      const metric = metrics[key];
       const label = key.toUpperCase().padEnd(4, " ");
-      const delta = formatDelta(metric.raw, metric.ema);
-      const warning = metric.outlier ? " ⚠" : "";
-      return `${label}  raw: ${formatNumber(metric.raw)}  ema: ${formatNumber(metric.ema)}  Δ:${delta}  src:${metric.source}  conf:${metric.confidence}${warning}`;
+      const delta = formatDelta(metric?.raw ?? null, metric?.ema ?? null);
+      const warning = metric?.outlier ? " ⚠" : "";
+      return `${label}  raw: ${formatNumber(metric?.raw ?? null)}  ema: ${formatNumber(
+        metric?.ema ?? null,
+      )}  Δ:${delta}  src:${metric?.source ?? "unknown"}  conf:${
+        metric?.confidence ?? "NONE"
+      }${warning}`;
     })
     .join("\n");
 
@@ -145,12 +152,15 @@ const getHistory = (limit = 50): RendererMetricDebugSample[] => {
 const printMetricHistory = (metric: MetricKeys = "dpr", limit = 10) => {
   const rows = getHistory(limit).map((sample) => ({
     time: new Date(sample.timestamp).toLocaleTimeString(),
-    raw: formatNumber(sample.metrics[metric].raw),
-    ema: formatNumber(sample.metrics[metric].ema),
-    delta: formatDelta(sample.metrics[metric].raw, sample.metrics[metric].ema),
-    outlier: sample.metrics[metric].outlier,
-    confidence: sample.metrics[metric].confidence,
-    source: sample.metrics[metric].source,
+    raw: formatNumber(sample.metrics?.[metric]?.raw ?? null),
+    ema: formatNumber(sample.metrics?.[metric]?.ema ?? null),
+    delta: formatDelta(
+      sample.metrics?.[metric]?.raw ?? null,
+      sample.metrics?.[metric]?.ema ?? null,
+    ),
+    outlier: sample.metrics?.[metric]?.outlier,
+    confidence: sample.metrics?.[metric]?.confidence,
+    source: sample.metrics?.[metric]?.source,
     presence: sample.presence,
     faceConfidence: sample.faceConfidence,
     poseConfidence: sample.poseConfidence,
@@ -161,6 +171,9 @@ const printMetricHistory = (metric: MetricKeys = "dpr", limit = 10) => {
 };
 
 export const handleMetricsDebug = (sample: RendererMetricDebugSample): void => {
+  if (!sample) {
+    return;
+  }
   history.push(sample);
   if (history.length > MAX_HISTORY) {
     history.shift();
