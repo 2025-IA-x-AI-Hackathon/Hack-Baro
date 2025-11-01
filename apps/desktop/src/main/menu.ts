@@ -190,22 +190,11 @@ export default class MenuBuilder {
           label: "Source Code (GitHub)",
           click() {
             shell
-              .openExternal("https://github.com/2025-IA-x-AI-Hackathon/Hack-Baro/posely")
+              .openExternal(
+                "https://github.com/2025-IA-x-AI-Hackathon/Hack-Baro",
+              )
               .catch((error: unknown) => {
                 logger.warn("Failed to open GitHub from menu", {
-                  context: "darwin:help-menu",
-                  ...toErrorPayload(error),
-                });
-              });
-          },
-        },
-        {
-          label: "Report an Issue",
-          click() {
-            shell
-              .openExternal("https://github.com/2025-IA-x-AI-Hackathon/Hack-Baro/posely/issues")
-              .catch((error: unknown) => {
-                logger.warn("Failed to open issue tracker from menu", {
                   context: "darwin:help-menu",
                   ...toErrorPayload(error),
                 });
@@ -315,22 +304,11 @@ export default class MenuBuilder {
             label: "Source Code (GitHub)",
             click() {
               shell
-                .openExternal("https://github.com/2025-IA-x-AI-Hackathon/Hack-Baro/posely")
+                .openExternal(
+                  "https://github.com/2025-IA-x-AI-Hackathon/Hack-Baro",
+                )
                 .catch((error: unknown) => {
                   logger.warn("Failed to open GitHub from menu", {
-                    context: "default:help-menu",
-                    ...toErrorPayload(error),
-                  });
-                });
-            },
-          },
-          {
-            label: "Report an Issue",
-            click() {
-              shell
-                .openExternal("https://github.com/2025-IA-x-AI-Hackathon/Hack-Baro/posely/issues")
-                .catch((error: unknown) => {
-                  logger.warn("Failed to open issue tracker from menu", {
                     context: "default:help-menu",
                     ...toErrorPayload(error),
                   });
