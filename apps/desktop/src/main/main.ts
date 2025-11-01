@@ -8,7 +8,16 @@
  */
 import dotenv from "dotenv";
 import dotenvExpand from "dotenv-expand";
-import { BrowserWindow, app, ipcMain, session, shell } from "electron";
+import {
+  BrowserWindow,
+  Menu as ElectronMenu,
+  Tray,
+  app,
+  ipcMain,
+  nativeImage,
+  session,
+  shell,
+} from "electron";
 import log from "electron-log";
 import { autoUpdater } from "electron-updater";
 import fs from "fs";
@@ -31,15 +40,21 @@ import {
   openCameraSettings,
   requestCameraPermission,
 } from "./cameraPermissions";
+import { getSetting, setSetting } from "./database/settingsRepository";
 import registerCalibrationHandler from "./ipc/calibrationHandler";
 import MenuBuilder from "./menu";
 import { captureException } from "./sentry";
 import { resolveHtmlPath } from "./util";
+import {
+  closeSettingsWindow,
+  createSettingsWindow,
+} from "./windows/settingsWindow";
 
 dotenvExpand.expand(dotenv.config());
 
 let mainWindow: BrowserWindow | null = null;
 let backgroundWorker: Worker | null = null;
+let tray: Tray | null = null;
 
 const pendingWorkerMessages: WorkerMessage[] = [];
 const logger = getLogger("main-process", "main");
@@ -374,6 +389,73 @@ const configureSecurityHeaders = () => {
   securityConfigured = true;
 };
 
+const createTray = () => {
+  if (tray) {
+    return tray;
+  }
+
+  const RESOURCES_PATH = app.isPackaged
+    ? path.join(process.resourcesPath, "assets")
+    : path.join(__dirname, "../../assets");
+
+  const getAssetPath = (...paths: string[]): string => {
+    return path.join(RESOURCES_PATH, ...paths);
+  };
+
+  // Create a simple 16x16 gray circle icon
+  const trayIconPath = getAssetPath("icons", "16x16.png");
+
+  // Create native image and resize for tray
+  const icon = nativeImage.createFromPath(trayIconPath);
+  const trayIcon = icon.resize({ width: 16, height: 16 });
+
+  tray = new Tray(trayIcon);
+  tray.setToolTip("Posely - Posture Monitor");
+
+  // Create context menu for tray
+  const contextMenu = ElectronMenu.buildFromTemplate([
+    {
+      label: "Show Dashboard",
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      },
+    },
+    {
+      label: "Settings",
+      click: () => {
+        createSettingsWindow();
+      },
+    },
+    { type: "separator" },
+    {
+      label: "Quit",
+      click: () => {
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(contextMenu);
+
+  // On macOS, clicking the tray icon should show the main window
+  tray.on("click", () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.hide();
+      } else {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    }
+  });
+
+  logger.info("System tray icon created");
+  return tray;
+};
+
 ipcMain.on(IPC_CHANNELS.rendererPing, (event, arg) => {
   if (arg === "error") {
     throw new Error("Intentional Main Process Error");
@@ -519,6 +601,64 @@ if (process.env.NODE_ENV === "production") {
     });
 }
 
+ipcMain.handle(IPC_CHANNELS.getSetting, (_event, key: string) => {
+  try {
+    return getSetting(key);
+  } catch (error) {
+    logger.error("Failed to get setting", toErrorPayload(error));
+    return null;
+  }
+});
+
+ipcMain.handle(
+  IPC_CHANNELS.setSetting,
+  (_event, key: string, value: string) => {
+    try {
+      setSetting(key, value);
+
+      // Handle launch at startup setting
+      if (key === "launchAtStartup") {
+        const enabled = value === "true";
+        app.setLoginItemSettings({
+          openAtLogin: enabled,
+        });
+        logger.info(`Launch at startup ${enabled ? "enabled" : "disabled"}`);
+      }
+
+      return { success: true };
+    } catch (error) {
+      logger.error("Failed to set setting", toErrorPayload(error));
+      return { success: false, error: String(error) };
+    }
+  },
+);
+
+ipcMain.handle(IPC_CHANNELS.openSettings, () => {
+  try {
+    createSettingsWindow();
+    return { success: true };
+  } catch (error) {
+    logger.error("Failed to open settings window", toErrorPayload(error));
+    return { success: false, error: String(error) };
+  }
+});
+
+ipcMain.handle(IPC_CHANNELS.reCalibrate, () => {
+  try {
+    // Close settings window if open
+    closeSettingsWindow();
+
+    // TODO: Trigger calibration flow from Story 1.2
+    // For now, just log that we received the request
+    logger.info("Re-calibration requested from settings");
+
+    return { success: true };
+  } catch (error) {
+    logger.error("Failed to trigger re-calibration", toErrorPayload(error));
+    return { success: false, error: String(error) };
+  }
+});
+
 const isDebug =
   process.env.NODE_ENV === "development" || process.env.DEBUG_PROD === "true";
 
@@ -542,6 +682,20 @@ if (isDebug) {
 }
 
 const createWindow = async () => {
+  // Check if onboarding has been completed
+  const onboardingCompleted = getSetting("onboardingCompleted");
+  logger.debug("Onboarding check", {
+    onboardingCompleted,
+    type: typeof onboardingCompleted,
+  });
+  const shouldShowOnboarding = onboardingCompleted !== "true";
+
+  if (shouldShowOnboarding) {
+    logger.info("First launch detected, showing onboarding wizard");
+  } else {
+    logger.info("Onboarding completed, starting app normally");
+  }
+
   if (shouldInstallDevtoolsExtensions) {
     await installExtensions();
   } else if (isDebug) {
@@ -577,6 +731,10 @@ const createWindow = async () => {
     },
   });
 
+  if (shouldShowOnboarding) {
+    // Load onboarding page
+  }
+
   // Build URL and pass dev-time feature flags to renderer via query params
   const baseUrl = resolveHtmlPath("index.html");
   const url = new URL(baseUrl);
@@ -584,7 +742,9 @@ const createWindow = async () => {
     url.searchParams.set("preferContinuityCamera", "1");
   }
 
-  await mainWindow.loadURL(url.toString());
+  mainWindow.loadURL(url.toString()).catch((error: unknown) => {
+    logger.error("Failed to load main window URL", toErrorPayload(error));
+  });
 
   mainWindow.webContents.once("did-finish-load", () => {
     flushPendingWorkerMessages();
@@ -687,6 +847,11 @@ app.on("before-quit", () => {
       );
     });
     backgroundWorker = null;
+  }
+
+  if (tray) {
+    tray.destroy();
+    tray = null;
   }
 });
 

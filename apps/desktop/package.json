@@ -48,7 +48,7 @@
     "build:main": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true NODE_OPTIONS=\"-r ts-node/register --no-warnings\" webpack --config ./.erb/configs/webpack.config.main.prod.ts",
     "build:renderer": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true NODE_OPTIONS=\"-r ts-node/register --no-warnings\" webpack --config ./.erb/configs/webpack.config.renderer.prod.ts",
     "postinstall": "node ./.erb/scripts/postinstall.js",
-    "lint": "cross-env NODE_ENV=development eslint .",
+    "lint": "cross-env NODE_ENV=development eslint . --format=json --quiet | node -e \"const fs=require('fs');const input=fs.readFileSync(0,'utf-8')||'[]';let data=[];try{data=JSON.parse(input);}catch(e){console.error('Failed to parse ESLint JSON output');process.exit(1);}const errors=data.reduce((s,f)=>s+f.errorCount,0);const warnings=data.reduce((s,f)=>s+f.warningCount,0);console.log(errors+' errors, '+warnings+' warnings');if(errors>0){process.exit(1);}\"",
     "lint:fix": "cross-env NODE_ENV=development eslint . --fix",
     "package": "ts-node ./.erb/scripts/clean.js dist && pnpm run build && electron-builder build --publish never && pnpm run build:dll",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
@@ -95,7 +95,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-i18next": "^16.0.0",
-    "react-router-dom": "^7.3.0"
+    "react-router-dom": "^7.3.0",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@baro/eslint-config": "workspace:*",
