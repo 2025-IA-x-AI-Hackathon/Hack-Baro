@@ -1,10 +1,22 @@
 import { Card, CardBody, CardHeader } from "@heroui/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+type DailySummary = {
+  date: string;
+  secondsInGreen: number;
+  secondsInYellow: number;
+  secondsInRed: number;
+  avgScore: number;
+  sampleCount: number;
+};
 
 export const Dashboard = () => {
+  const [isLoading, setIsLoading] = useState(true);
+  const [dailySummary, setDailySummary] = useState<DailySummary | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
   // Placeholder data for initial implementation
   const streak = 12;
-  const todayScore = 92;
   const weeklyData = [
     { day: "Mon", score: 85 },
     { day: "Tue", score: 88 },
@@ -14,6 +26,33 @@ export const Dashboard = () => {
     { day: "Sat", score: 89 },
     { day: "Sun", score: 91 },
   ];
+
+  useEffect(() => {
+    const fetchDailySummary = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const response = await window.electron.ipcRenderer.invoke(
+          window.electron.channels.getDailySummary,
+        );
+
+        if (response.success && response.data) {
+          setDailySummary(response.data);
+        } else {
+          setError(response.error ?? "Failed to fetch daily summary");
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unknown error occurred");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDailySummary();
+  }, []);
+
+  const todayScore = dailySummary?.avgScore ?? 0;
 
   return (
     <div className="flex min-h-screen items-start justify-center bg-neutral-50 p-4">
@@ -44,14 +83,29 @@ export const Dashboard = () => {
             </h3>
           </CardHeader>
           <CardBody className="flex items-center justify-center py-6">
-            <div className="text-center">
-              <div className="text-6xl font-bold text-blue-500">
-                {todayScore}%
+            {isLoading ? (
+              <div className="text-center">
+                <div className="text-sm text-slate-500">Loading...</div>
               </div>
-              <div className="mt-1 text-sm text-slate-500">
-                posture quality
+            ) : error ? (
+              <div className="text-center">
+                <div className="text-sm text-red-500">Error: {error}</div>
               </div>
-            </div>
+            ) : (
+              <div className="text-center">
+                <div className="text-6xl font-bold text-blue-500">
+                  {Math.round(todayScore)}%
+                </div>
+                <div className="mt-1 text-sm text-slate-500">
+                  posture quality
+                </div>
+                {dailySummary && dailySummary.sampleCount > 0 && (
+                  <div className="mt-2 text-xs text-slate-400">
+                    {dailySummary.sampleCount} samples
+                  </div>
+                )}
+              </div>
+            )}
           </CardBody>
         </Card>
 
