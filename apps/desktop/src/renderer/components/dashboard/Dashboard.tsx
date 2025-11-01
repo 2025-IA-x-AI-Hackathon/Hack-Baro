@@ -9,6 +9,7 @@ type DailySummary = {
   secondsInRed: number;
   avgScore: number;
   sampleCount: number;
+  streak: number;
 };
 
 export const Dashboard = () => {
@@ -18,8 +19,14 @@ export const Dashboard = () => {
   const [weeklyData, setWeeklyData] = useState<WeeklyDataPoint[]>([]);
   const [isLoadingWeekly, setIsLoadingWeekly] = useState(true);
 
-  // Placeholder data for initial implementation
-  const streak = 12;
+  // Helper function to get color based on streak value
+  const getStreakColor = (streakValue: number): string => {
+    if (streakValue >= 7) return "text-green-500";
+    if (streakValue >= 3) return "text-yellow-500";
+    return "text-gray-500";
+  };
+
+  const streak = dailySummary?.streak ?? 0;
 
   useEffect(() => {
     const fetchDailySummary = async () => {
@@ -82,7 +89,10 @@ export const Dashboard = () => {
           <CardBody className="flex items-center justify-center py-6">
             <div className="text-center">
               <div className="text-6xl">🔥</div>
-              <div className="mt-2 text-5xl font-bold text-slate-800">
+              <div
+                className={`mt-2 text-5xl font-bold ${getStreakColor(streak)}`}
+                title="Consecutive days with score ≥ 70%"
+              >
                 {streak}
               </div>
               <div className="mt-1 text-sm text-slate-500">days</div>
