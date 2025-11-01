@@ -1,5 +1,6 @@
 import { Card, CardBody, CardHeader } from "@heroui/react";
 import { useEffect, useState } from "react";
+import { WeeklyChart, type WeeklyDataPoint } from "./WeeklyChart";
 
 type DailySummary = {
   date: string;
@@ -14,18 +15,11 @@ export const Dashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [dailySummary, setDailySummary] = useState<DailySummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [weeklyData, setWeeklyData] = useState<WeeklyDataPoint[]>([]);
+  const [isLoadingWeekly, setIsLoadingWeekly] = useState(true);
 
   // Placeholder data for initial implementation
   const streak = 12;
-  const weeklyData = [
-    { day: "Mon", score: 85 },
-    { day: "Tue", score: 88 },
-    { day: "Wed", score: 90 },
-    { day: "Thu", score: 87 },
-    { day: "Fri", score: 92 },
-    { day: "Sat", score: 89 },
-    { day: "Sun", score: 91 },
-  ];
 
   useEffect(() => {
     const fetchDailySummary = async () => {
@@ -49,7 +43,28 @@ export const Dashboard = () => {
       }
     };
 
+    const fetchWeeklySummary = async () => {
+      setIsLoadingWeekly(true);
+
+      try {
+        const response = await window.electron.ipcRenderer.invoke(
+          window.electron.channels.getWeeklySummary,
+        );
+
+        if (response.success && response.data) {
+          setWeeklyData(response.data);
+        } else {
+          console.error("Failed to fetch weekly summary:", response.error);
+        }
+      } catch (err) {
+        console.error("Error fetching weekly summary:", err);
+      } finally {
+        setIsLoadingWeekly(false);
+      }
+    };
+
     fetchDailySummary();
+    fetchWeeklySummary();
   }, []);
 
   const todayScore = dailySummary?.avgScore ?? 0;
@@ -117,22 +132,13 @@ export const Dashboard = () => {
             </h3>
           </CardHeader>
           <CardBody className="py-6">
-            <div className="flex h-48 items-end justify-around gap-2 px-4">
-              {weeklyData.map((data) => (
-                <div key={data.day} className="flex flex-1 flex-col items-center">
-                  <div className="relative w-full">
-                    <div
-                      className="w-full rounded-t-md bg-blue-500 transition-all hover:bg-blue-600"
-                      style={{
-                        height: `${(data.score / 100) * 160}px`,
-                      }}
-                      title={`${data.day}: ${data.score}%`}
-                    />
-                  </div>
-                  <div className="mt-2 text-xs text-slate-500">{data.day}</div>
-                </div>
-              ))}
-            </div>
+            {isLoadingWeekly ? (
+              <div className="flex h-48 items-center justify-center">
+                <div className="text-sm text-slate-500">Loading chart...</div>
+              </div>
+            ) : (
+              <WeeklyChart data={weeklyData} />
+            )}
           </CardBody>
         </Card>
       </div>
