@@ -236,6 +236,8 @@ const dispatchWorkerMessage = (message: WorkerMessage) => {
       );
       break;
     case WORKER_MESSAGES.engineTick:
+      // Story 1.4: Update tray icon based on zone
+      handlePostureUpdate(message.payload);
       mainWindow.webContents.send(
         IPC_CHANNELS.engineTick,
         message.payload ?? null,
@@ -432,6 +434,73 @@ const buildTrayMenu = (): Electron.Menu => {
   ]);
 };
 
+// Story 1.4: Current posture zone from latest EngineTick
+let currentZone: "GREEN" | "YELLOW" | "RED" = "GREEN";
+
+/**
+ * Story 1.4: Create a simple colored icon for the tray
+ * This creates a 16x16 colored circle as the icon
+ */
+const createColoredIcon = (color: string): Electron.NativeImage => {
+  // Create a simple SVG circle with the specified color
+  const svg = `
+    <svg width="16" height="16" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="8" cy="8" r="6" fill="${color}" stroke="#000000" stroke-width="0.5" opacity="0.9"/>
+    </svg>
+  `;
+
+  return nativeImage.createFromBuffer(Buffer.from(svg));
+};
+
+/**
+ * Story 1.4: Get zone color hex values from UX spec
+ */
+const getZoneColor = (zone: "GREEN" | "YELLOW" | "RED"): string => {
+  switch (zone) {
+    case "GREEN":
+      return "#48BB78"; // Success green
+    case "YELLOW":
+      return "#F6E05E"; // Warning yellow
+    case "RED":
+      return "#F56565"; // Error red
+  }
+};
+
+/**
+ * Story 1.4: Handle posture updates from worker's EngineTick
+ * Updates the tray icon based on the zone field
+ */
+const handlePostureUpdate = (payload: unknown): void => {
+  if (!payload || typeof payload !== "object") {
+    return;
+  }
+
+  const tickPayload = payload as { tick?: { zone?: string } };
+  const zone = tickPayload.tick?.zone;
+
+  if (!zone || typeof zone !== "string") {
+    return;
+  }
+
+  // Validate zone is one of the expected values
+  if (zone !== "GREEN" && zone !== "YELLOW" && zone !== "RED") {
+    logger.warn("Received invalid zone value from EngineTick", { zone });
+    return;
+  }
+
+  // Update current zone and tray icon
+  const previousZone = currentZone;
+  currentZone = zone;
+
+  if (previousZone !== currentZone) {
+    logger.info("Posture zone changed, updating tray icon", {
+      from: previousZone,
+      to: currentZone,
+    });
+    updateTrayIcon();
+  }
+};
+
 const updateTrayIcon = () => {
   if (!tray) {
     return;
@@ -445,11 +514,18 @@ const updateTrayIcon = () => {
     return path.join(RESOURCES_PATH, ...paths);
   };
 
-  const iconFileName = isPaused ? "16x16-paused.png" : "16x16.png";
-  const trayIconPath = getAssetPath("icons", iconFileName);
+  let trayIcon: Electron.NativeImage;
 
-  const icon = nativeImage.createFromPath(trayIconPath);
-  const trayIcon = icon.resize({ width: 16, height: 16 });
+  // Story 1.4: Use paused icon if paused, otherwise use zone-based colored icon
+  if (isPaused) {
+    const trayIconPath = getAssetPath("icons", "16x16-paused.png");
+    const icon = nativeImage.createFromPath(trayIconPath);
+    trayIcon = icon.resize({ width: 16, height: 16 });
+  } else {
+    // Create colored icon based on current zone
+    const color = getZoneColor(currentZone);
+    trayIcon = createColoredIcon(color);
+  }
 
   tray.setImage(trayIcon);
 };
@@ -465,10 +541,10 @@ const updateTrayMenu = () => {
 
 const togglePauseState = () => {
   isPaused = !isPaused;
-  
+
   // Update tray icon
   updateTrayIcon();
-  
+
   // Update tray menu
   updateTrayMenu();
 
