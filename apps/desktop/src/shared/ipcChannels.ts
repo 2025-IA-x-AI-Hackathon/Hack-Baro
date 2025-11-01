@@ -22,6 +22,7 @@ export const IPC_CHANNELS = {
   requestCameraPermission: "camera:request-permission",
   openCameraSettings: "camera:open-settings",
   appStatusChanged: "app:status-changed",
+  getDailySummary: "dashboard:get-daily-summary",
 } as const;
 
 export type RendererChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
@@ -36,6 +37,9 @@ export const WORKER_MESSAGES = {
   engineError: "engine:error",
   triggerWorkerError: "error:trigger-worker",
   setPaused: "worker:set-paused",
+  persistPostureData: "worker:persist-posture-data",
+  getDailySummary: "worker:get-daily-summary",
+  dailySummaryResponse: "worker:daily-summary-response",
 } as const;
 
 export type WorkerMessageType =
