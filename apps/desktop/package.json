@@ -2,15 +2,10 @@
   "name": "@baro/desktop",
   "description": "A foundation for scalable desktop apps",
   "keywords": [
-    "electron",
-    "boilerplate",
-    "react",
-    "typescript",
-    "ts",
-    "sass",
-    "webpack",
-    "hot",
-    "reload"
+    "posely",
+    "forward head posture",
+    "slouching",
+    "posture"
   ],
   "homepage": "https://github.com/electron-react-boilerplate/electron-react-boilerplate#readme",
   "bugs": {
@@ -73,35 +68,25 @@
   "browserslist": [
     "extends browserslist-config-erb"
   ],
-  "prettier": {
-    "singleQuote": true,
-    "overrides": [
-      {
-        "files": [
-          ".prettierrc",
-          ".eslintrc"
-        ],
-        "options": {
-          "parser": "json"
-        }
-      }
-    ]
-  },
   "dependencies": {
     "@electron/notarize": "^3.1.0",
     "@heroui/react": "2.8.5",
     "@heroui/theme": "2.4.23",
     "@logtail/browser": "^0.5.6",
     "@logtail/node": "^0.5.6",
+    "@mediapipe/tasks-vision": "^0.10.22-rc.20250304",
     "@sentry/electron": "^7.1.1",
     "@sentry/node": "^10.19.0",
+    "better-sqlite3": "^12.4.1",
     "chalk": "^4.1.2",
+    "drizzle-orm": "^0.44.6",
     "electron-debug": "^4.1.0",
     "electron-log": "^5.4.3",
     "electron-updater": "^6.6.2",
     "framer-motion": "^12.23.24",
     "i18next": "^25.6.0",
     "i18next-browser-languagedetector": "^8.2.0",
+    "onnxruntime-web": "^1.23.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-i18next": "^16.0.0",
@@ -120,6 +105,7 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "22.13.10",
     "@types/react": "^19.0.11",
     "@types/react-dom": "^19.0.4",
@@ -130,6 +116,7 @@
     "@vitejs/plugin-react": "^4.7.0",
     "@vitest/coverage-v8": "^2.1.9",
     "browserslist-config-erb": "^0.0.3",
+    "canvas": "^3.2.0",
     "concurrently": "^9.1.2",
     "core-js": "^3.41.0",
     "cross-env": "^7.0.3",
@@ -172,10 +159,10 @@
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "tsconfig-paths-webpack-plugin": "^4.2.0",
-    "typescript": "^5.8.2",
+    "typescript": "^5.9.2",
     "url-loader": "^4.1.1",
-    "vite": "^5.4.20",
-    "vitest": "^2.1.9",
+    "vite": "^6.4.1",
+    "vitest": "^3.2.4",
     "webpack": "^5.98.0",
     "webpack-bundle-analyzer": "^4.10.2",
     "webpack-cli": "^6.0.1",
@@ -206,7 +193,8 @@
       "hardenedRuntime": true,
       "entitlements": "assets/entitlements.mac.plist",
       "entitlementsInherit": "assets/entitlements.mac.plist",
-      "gatekeeperAssess": false
+      "gatekeeperAssess": false,
+      "extendInfo": "Info.plist"
     },
     "dmg": {
       "contents": [
