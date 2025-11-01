@@ -6,30 +6,31 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
-import path from 'path';
-import { Worker } from 'node:worker_threads';
-import { app, BrowserWindow, shell, ipcMain } from 'electron';
-import { autoUpdater } from 'electron-updater';
-import log from 'electron-log';
-import { captureException } from './sentry';
-import MenuBuilder from './menu';
-import { resolveHtmlPath } from './util';
+import { BrowserWindow, app, ipcMain, shell } from "electron";
+import log from "electron-log";
+import { autoUpdater } from "electron-updater";
+import { Worker } from "node:worker_threads";
+import path from "path";
 import {
   IPC_CHANNELS,
   WORKER_MESSAGES,
   type WorkerMessage,
-} from '../shared/ipcChannels';
+} from "../shared/ipcChannels";
+import { getLogger } from "../shared/logger";
 import {
   openCameraSettings,
   requestCameraPermission,
-} from './cameraPermissions';
-import { getLogger } from '../shared/logger';
+} from "./cameraPermissions";
+import registerCalibrationHandler from "./ipc/calibrationHandler";
+import MenuBuilder from "./menu";
+import { captureException } from "./sentry";
+import { resolveHtmlPath } from "./util";
 
 let mainWindow: BrowserWindow | null = null;
 let backgroundWorker: Worker | null = null;
 
 const pendingWorkerMessages: WorkerMessage[] = [];
-const logger = getLogger('main-process', 'main');
+const logger = getLogger("main-process", "main");
 
 const toErrorPayload = (error: unknown) => ({
   error: error instanceof Error ? error.message : String(error),
@@ -38,7 +39,7 @@ const toErrorPayload = (error: unknown) => ({
 
 const installExtensions = async (): Promise<void> => {
   try {
-    const installerModule = await import('electron-devtools-installer');
+    const installerModule = await import("electron-devtools-installer");
     const { installExtension, REACT_DEVELOPER_TOOLS } = installerModule;
 
     const forceDownload = Boolean(process.env.UPGRADE_EXTENSIONS);
@@ -47,19 +48,19 @@ const installExtensions = async (): Promise<void> => {
     });
   } catch (error: unknown) {
     logger.warn(
-      'Failed to install developer tools extensions',
+      "Failed to install developer tools extensions",
       toErrorPayload(error),
     );
   }
 };
 
 const initializeAppUpdater = (): void => {
-  log.transports.file.level = 'info';
+  log.transports.file.level = "info";
   autoUpdater.logger = log;
 
   autoUpdater.checkForUpdatesAndNotify().catch((error: unknown) => {
     logger.warn(
-      'Auto updater failed to check for updates',
+      "Auto updater failed to check for updates",
       toErrorPayload(error),
     );
   });
@@ -108,8 +109,8 @@ const flushPendingWorkerMessages = () => {
 };
 
 const WORKER_BUNDLE_FILES = {
-  packaged: 'worker.js',
-  development: 'worker.bundle.dev.js',
+  packaged: "worker.js",
+  development: "worker.bundle.dev.js",
 } as const;
 
 const getWorkerEntrypoint = () =>
@@ -126,12 +127,12 @@ const startWorker = () => {
 
   try {
     backgroundWorker = new Worker(workerEntrypoint);
-    backgroundWorker.on('message', (message: WorkerMessage) => {
+    backgroundWorker.on("message", (message: WorkerMessage) => {
       dispatchWorkerMessage(message);
     });
-    backgroundWorker.on('error', (error) => {
-      logger.error('Worker process error', toErrorPayload(error));
-      captureException(error, { scope: 'worker:error' });
+    backgroundWorker.on("error", (error) => {
+      logger.error("Worker process error", toErrorPayload(error));
+      captureException(error, { scope: "worker:error" });
       dispatchWorkerMessage({
         type: WORKER_MESSAGES.status,
         payload: {
@@ -139,9 +140,9 @@ const startWorker = () => {
         },
       });
     });
-    backgroundWorker.on('exit', (code) => {
+    backgroundWorker.on("exit", (code) => {
       if (code !== 0) {
-        logger.warn('Worker exited with non-zero code', {
+        logger.warn("Worker exited with non-zero code", {
           code,
         });
         dispatchWorkerMessage({
@@ -154,8 +155,8 @@ const startWorker = () => {
       backgroundWorker = null;
     });
   } catch (error: unknown) {
-    logger.error('Failed to start background worker', toErrorPayload(error));
-    captureException(error, { scope: 'worker:start' });
+    logger.error("Failed to start background worker", toErrorPayload(error));
+    captureException(error, { scope: "worker:start" });
     dispatchWorkerMessage({
       type: WORKER_MESSAGES.status,
       payload: {
@@ -168,36 +169,36 @@ const startWorker = () => {
 };
 
 ipcMain.on(IPC_CHANNELS.rendererPing, (event, arg) => {
-  if (arg === 'error') {
-    throw new Error('Intentional Main Process Error');
+  if (arg === "error") {
+    throw new Error("Intentional Main Process Error");
   }
   const msgTemplate = (pingPong: string) => `IPC ping: ${pingPong}`;
-  logger.info('Renderer ping received', { payload: arg });
-  event.reply(IPC_CHANNELS.rendererPing, msgTemplate('pong'));
+  logger.info("Renderer ping received", { payload: arg });
+  event.reply(IPC_CHANNELS.rendererPing, msgTemplate("pong"));
 });
 
 ipcMain.on(IPC_CHANNELS.workerRequest, (event) => {
   if (!backgroundWorker) {
     event.sender.send(IPC_CHANNELS.workerStatus, {
-      state: 'starting',
+      state: "starting",
       observedAt: new Date().toISOString(),
     });
     event.sender.send(IPC_CHANNELS.workerResponse, {
-      error: 'Background worker not running yet',
+      error: "Background worker not running yet",
     });
     startWorker();
     return;
   }
 
   event.sender.send(IPC_CHANNELS.workerStatus, {
-    state: 'online',
+    state: "online",
     observedAt: new Date().toISOString(),
   });
   backgroundWorker.postMessage({ type: WORKER_MESSAGES.ping });
 });
 
 ipcMain.handle(IPC_CHANNELS.TRIGGER_MAIN_ERROR, () => {
-  throw new Error('Intentional Main Process Error from Renderer');
+  throw new Error("Intentional Main Process Error from Renderer");
 });
 
 ipcMain.on(IPC_CHANNELS.TRIGGER_WORKER_ERROR, () => {
@@ -214,35 +215,35 @@ ipcMain.handle(IPC_CHANNELS.REQUEST_CAMERA_PERMISSION, () =>
 
 ipcMain.handle(IPC_CHANNELS.OPEN_CAMERA_SETTINGS, () => openCameraSettings());
 
-if (process.env.NODE_ENV === 'production') {
-  import('source-map-support')
+if (process.env.NODE_ENV === "production") {
+  import("source-map-support")
     .then(({ install }) => {
       return install();
     })
     .catch((error: unknown) => {
       logger.warn(
-        'Failed to install source map support',
+        "Failed to install source map support",
         toErrorPayload(error),
       );
     });
 }
 
 const isDebug =
-  process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true';
+  process.env.NODE_ENV === "development" || process.env.DEBUG_PROD === "true";
 
 const shouldInstallDevtoolsExtensions =
-  isDebug && process.env.ENABLE_DEVTOOLS_EXTENSIONS === 'true';
+  isDebug && process.env.ENABLE_DEVTOOLS_EXTENSIONS === "true";
 
 if (isDebug) {
-  import('electron-debug')
+  import("electron-debug")
     .then(({ default: electronDebug }) => {
       return electronDebug({
-        showDevTools: process.env.ENABLE_DEVTOOLS_EXTENSIONS === 'true',
+        showDevTools: process.env.ENABLE_DEVTOOLS_EXTENSIONS === "true",
       });
     })
     .catch((error: unknown) => {
       logger.warn(
-        'Failed to enable electron debug tooling',
+        "Failed to enable electron debug tooling",
         toErrorPayload(error),
       );
     });
@@ -253,13 +254,13 @@ const createWindow = async () => {
     await installExtensions();
   } else if (isDebug) {
     logger.info(
-      'Skipping devtools extension installation for development. Set ENABLE_DEVTOOLS_EXTENSIONS=true to enable.',
+      "Skipping devtools extension installation for development. Set ENABLE_DEVTOOLS_EXTENSIONS=true to enable.",
     );
   }
 
   const RESOURCES_PATH = app.isPackaged
-    ? path.join(process.resourcesPath, 'assets')
-    : path.join(__dirname, '../../assets');
+    ? path.join(process.resourcesPath, "assets")
+    : path.join(__dirname, "../../assets");
 
   const getAssetPath = (...paths: string[]): string => {
     return path.join(RESOURCES_PATH, ...paths);
@@ -269,21 +270,21 @@ const createWindow = async () => {
     show: false,
     width: 1024,
     height: 728,
-    icon: getAssetPath('icon.png'),
+    icon: getAssetPath("icon.png"),
     webPreferences: {
       preload: app.isPackaged
-        ? path.join(__dirname, 'preload.js')
-        : path.join(__dirname, '../../.erb/dll/preload.js'),
+        ? path.join(__dirname, "preload.js")
+        : path.join(__dirname, "../../.erb/dll/preload.js"),
     },
   });
 
-  await mainWindow.loadURL(resolveHtmlPath('index.html'));
+  await mainWindow.loadURL(resolveHtmlPath("index.html"));
 
-  mainWindow.webContents.once('did-finish-load', () => {
+  mainWindow.webContents.once("did-finish-load", () => {
     flushPendingWorkerMessages();
   });
 
-  mainWindow.on('ready-to-show', () => {
+  mainWindow.on("ready-to-show", () => {
     if (!mainWindow) {
       throw new Error('"mainWindow" is not defined');
     }
@@ -294,7 +295,7 @@ const createWindow = async () => {
     }
   });
 
-  mainWindow.on('closed', () => {
+  mainWindow.on("closed", () => {
     mainWindow = null;
   });
 
@@ -305,11 +306,11 @@ const createWindow = async () => {
   mainWindow.webContents.setWindowOpenHandler((edata) => {
     shell.openExternal(edata.url).catch((error: unknown) => {
       logger.error(
-        'Failed to open external URL from main window',
+        "Failed to open external URL from main window",
         toErrorPayload(error),
       );
     });
-    return { action: 'deny' };
+    return { action: "deny" };
   });
 
   // Remove this if your app does not use auto updates
@@ -320,11 +321,11 @@ const createWindow = async () => {
  * Add event listeners...
  */
 
-app.on('before-quit', () => {
+app.on("before-quit", () => {
   if (backgroundWorker) {
     backgroundWorker.terminate().catch((error: unknown) => {
       logger.warn(
-        'Failed to terminate background worker',
+        "Failed to terminate background worker",
         toErrorPayload(error),
       );
     });
@@ -332,24 +333,25 @@ app.on('before-quit', () => {
   }
 });
 
-app.on('window-all-closed', () => {
+app.on("window-all-closed", () => {
   // Respect the OSX convention of having the application in memory even
   // after all windows have been closed
-  if (process.platform !== 'darwin') {
+  if (process.platform !== "darwin") {
     app.quit();
   }
 });
 
 const onAppReady = async () => {
   startWorker();
+  registerCalibrationHandler();
   await createWindow();
-  app.on('activate', () => {
+  app.on("activate", () => {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
     if (mainWindow === null) {
       createWindow().catch((error: unknown) => {
         logger.error(
-          'Failed to create window after activation',
+          "Failed to create window after activation",
           toErrorPayload(error),
         );
       });
@@ -362,7 +364,7 @@ app
   .then(onAppReady)
   .catch((error: unknown) => {
     logger.error(
-      'Failed to initialise Electron application',
+      "Failed to initialise Electron application",
       toErrorPayload(error),
     );
   });
