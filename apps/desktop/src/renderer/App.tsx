@@ -35,6 +35,7 @@ import {
 import { useDetectionPipeline } from "./detection/useDetectionPipeline";
 import { OnboardingWizardV2 } from "./components/onboarding/OnboardingWizardV2";
 import { Settings } from "./components/settings/Settings";
+import { Dashboard } from "./components/dashboard/Dashboard";
 import "./styles/globals.css";
 
 type ElectronApi = Window["electron"];
@@ -991,6 +992,7 @@ export default function App() {
       <HashRouter>
         <Routes>
           <Route path="/settings" element={<Settings />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route
             path="/"
             element={
