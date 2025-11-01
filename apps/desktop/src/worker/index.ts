@@ -59,7 +59,12 @@ const getCurrentDate = (): string => {
 const resetAccumulatorIfNewDay = () => {
   const currentDate = getCurrentDate();
   if (postureAccumulator.date !== currentDate) {
-    logger.info(`New day detected, resetting accumulator from ${postureAccumulator.date} to ${currentDate}`);
+    logger.info(`New day detected, persisting final data for ${postureAccumulator.date} before reset`);
+    
+    // Persist the previous day's final data before resetting
+    persistPostureData();
+    
+    logger.info(`Resetting accumulator for new day: ${currentDate}`);
     postureAccumulator = {
       date: currentDate,
       secondsInGreen: 0,
