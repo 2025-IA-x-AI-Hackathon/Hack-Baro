@@ -38,7 +38,7 @@ export const upsertDailyPostureLog = (
       }
 
       // Recalculate meetsGoal based on new average score
-      const meetsGoal = newAvgScore >= 70 ? 1 : 0;
+      const meetsGoal = newAvgScore >= STREAK_THRESHOLD ? 1 : 0;
       
       const updated = db
         .update(dailyPostureLogs)
