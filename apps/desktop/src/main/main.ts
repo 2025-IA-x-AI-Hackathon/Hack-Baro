@@ -359,7 +359,8 @@ const createWindow = async () => {
 
   mainWindow = new BrowserWindow({
     show: false,
-
+    width: 1024,
+    height: 728,
     icon: getAssetPath("icon.png"),
     webPreferences: {
       preload: app.isPackaged
@@ -386,6 +387,7 @@ const createWindow = async () => {
     url.searchParams.set("preferContinuityCamera", "1");
   }
 
+  mainWindow.loadURL(url.toString());
 
   mainWindow.webContents.once("did-finish-load", () => {
     flushPendingWorkerMessages();
