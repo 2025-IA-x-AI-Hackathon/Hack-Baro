@@ -1,4 +1,4 @@
-import { eq, gte, lte, and, sql } from "drizzle-orm";
+import { eq, gte, lte, and } from "drizzle-orm";
 import { getLogger } from "../../shared/logger";
 import { getDatabase } from "./client";
 import {
@@ -111,7 +111,10 @@ export const getWeeklySummary = (): DailyPostureLogRow[] => {
       .select()
       .from(dailyPostureLogs)
       .where(
-        sql`${dailyPostureLogs.date} >= ${startDate} AND ${dailyPostureLogs.date} <= ${endDate}`
+        and(
+          gte(dailyPostureLogs.date, startDate),
+          lte(dailyPostureLogs.date, endDate)
+        )
       )
       .orderBy(dailyPostureLogs.date)
       .all();
