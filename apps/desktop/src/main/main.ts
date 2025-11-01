@@ -44,11 +44,11 @@ import {
   requestCameraPermission,
 } from "./cameraPermissions";
 import { initializeDatabase } from "./database/client";
-import { getSetting, setSetting } from "./database/settingsRepository";
 import {
   getDailyPostureLogByDate,
   upsertDailyPostureLog,
 } from "./database/dailyPostureRepository";
+import { getSetting, setSetting } from "./database/settingsRepository";
 import registerCalibrationHandler from "./ipc/calibrationHandler";
 import MenuBuilder from "./menu";
 import { captureException } from "./sentry";
@@ -262,19 +262,23 @@ const dispatchWorkerMessage = (message: WorkerMessage) => {
       break;
     case WORKER_MESSAGES.persistPostureData: {
       // Handle persisting posture data to database
-      const payload = message.payload as {
-        date: string;
-        secondsInGreen: number;
-        secondsInYellow: number;
-        secondsInRed: number;
-        avgScore: number;
-        sampleCount: number;
-      } | undefined;
+      const payload = message.payload as
+        | {
+            date: string;
+            secondsInGreen: number;
+            secondsInYellow: number;
+            secondsInRed: number;
+            avgScore: number;
+            sampleCount: number;
+          }
+        | undefined;
 
       if (payload) {
         try {
           upsertDailyPostureLog(payload);
-          logger.info("Successfully persisted posture data", { date: payload.date });
+          logger.info("Successfully persisted posture data", {
+            date: payload.date,
+          });
         } catch (error) {
           logger.error("Failed to persist posture data", {
             error: error instanceof Error ? error.message : String(error),
@@ -424,16 +428,39 @@ const configureSecurityHeaders = () => {
   securityConfigured = true;
 };
 
+/**
+ * Story 1.5: Build tray menu with improved visual organization
+ *
+ * Menu Grouping Philosophy:
+ * - Status Group: Current posture state (informational only)
+ * - Application Group: Actions that open new windows (Desktop, Dashboard, Settings)
+ * - Monitoring Group: Controls for detection (Pause/Resume)
+ * - System Group: App-level actions (Quit)
+ */
 const buildTrayMenu = (): Electron.Menu => {
   const statusLabel = isPaused ? "Status: Paused" : "Status: Monitoring";
   const pauseResumeLabel = isPaused ? "Resume Monitoring" : "Pause Monitoring";
 
   return ElectronMenu.buildFromTemplate([
+    // Status Group
     {
       label: statusLabel,
       enabled: false,
     },
-    { type: "separator" },
+    { type: "separator" }, // Story 1.5: Separator after status
+
+    // Application Group
+    {
+      label: "Show Desktop",
+      click: () => {
+        if (mainWindow) {
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          mainWindow.focus();
+        } else {
+          createWindow();
+        }
+      },
+    },
     {
       label: "Show Dashboard",
       click: () => {
@@ -446,13 +473,18 @@ const buildTrayMenu = (): Electron.Menu => {
         createSettingsWindow();
       },
     },
+    { type: "separator" }, // Story 1.5: Separator after application controls
+
+    // Monitoring Group
     {
       label: pauseResumeLabel,
       click: () => {
         togglePauseState();
       },
     },
-    { type: "separator" },
+    { type: "separator" }, // Separator before system actions
+
+    // System Group
     {
       label: "Quit Posely",
       click: () => {
@@ -843,12 +875,14 @@ ipcMain.handle(IPC_CHANNELS.reCalibrate, () => {
 ipcMain.handle(IPC_CHANNELS.getDailySummary, async () => {
   try {
     const currentDate = new Date().toISOString().split("T")[0] ?? "";
-    
+
     // Get data from database
     const dbData = getDailyPostureLogByDate(currentDate);
 
     if (dbData) {
-      logger.info("Retrieved daily summary from database", { date: currentDate });
+      logger.info("Retrieved daily summary from database", {
+        date: currentDate,
+      });
       return {
         success: true,
         data: {
@@ -861,7 +895,9 @@ ipcMain.handle(IPC_CHANNELS.getDailySummary, async () => {
         },
       };
     } else {
-      logger.info("No daily summary data found for today", { date: currentDate });
+      logger.info("No daily summary data found for today", {
+        date: currentDate,
+      });
       return {
         success: true,
         data: {
