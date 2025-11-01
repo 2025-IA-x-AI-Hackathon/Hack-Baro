@@ -48,16 +48,21 @@ const normalizePlugins = (() => {
 
     let nextRules = config.rules;
     if (nextRules) {
-      const rewrittenRules = Object.entries(nextRules).reduce((acc, [ruleName, value]) => {
-        if (ruleName.startsWith('jest/')) {
-          mutated = true;
+      const rewrittenRules = Object.entries(nextRules).reduce(
+        (acc, [ruleName, value]) => {
+          if (ruleName.startsWith('jest/')) {
+            mutated = true;
+            return acc;
+          }
+          acc[ruleName] = value;
           return acc;
-        }
-        acc[ruleName] = value;
-        return acc;
-      }, {});
+        },
+        {},
+      );
 
-      if (Object.keys(rewrittenRules).length !== Object.keys(nextRules).length) {
+      if (
+        Object.keys(rewrittenRules).length !== Object.keys(nextRules).length
+      ) {
         nextRules = rewrittenRules;
       } else {
         nextRules = undefined;
