@@ -430,7 +430,10 @@ if (isDebug) {
 const createWindow = async () => {
   // Check if onboarding has been completed
   const onboardingCompleted = getSetting("onboardingCompleted");
-  logger.debug("Onboarding check", { onboardingCompleted, type: typeof onboardingCompleted });
+  logger.debug("Onboarding check", {
+    onboardingCompleted,
+    type: typeof onboardingCompleted,
+  });
   const shouldShowOnboarding = onboardingCompleted !== "true";
 
   if (shouldShowOnboarding) {
@@ -485,7 +488,9 @@ const createWindow = async () => {
     url.searchParams.set("preferContinuityCamera", "1");
   }
 
-  mainWindow.loadURL(url.toString());
+  mainWindow.loadURL(url.toString()).catch((error: unknown) => {
+    logger.error("Failed to load main window URL", toErrorPayload(error));
+  });
 
   mainWindow.webContents.once("did-finish-load", () => {
     flushPendingWorkerMessages();
