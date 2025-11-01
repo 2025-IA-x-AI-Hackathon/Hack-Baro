@@ -7,6 +7,7 @@ import {
 } from "electron";
 import { autoUpdater } from "electron-updater";
 import { getLogger } from "../shared/logger";
+import { createSettingsWindow } from "./windows/settingsWindow";
 
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
   selector?: string;
@@ -79,6 +80,18 @@ export default class MenuBuilder {
                 ...toErrorPayload(error),
               });
             });
+          },
+        },
+        { type: "separator" },
+        {
+          label: "Settings…",
+          accelerator: "Command+,",
+          click: () => {
+            try {
+              createSettingsWindow();
+            } catch (error) {
+              logger.error("Failed to open settings from menu", toErrorPayload(error));
+            }
           },
         },
         { type: "separator" },
@@ -229,6 +242,18 @@ export default class MenuBuilder {
               });
             },
           },
+          {
+            label: "&Settings",
+            accelerator: "Ctrl+,",
+            click: () => {
+              try {
+                createSettingsWindow();
+              } catch (error) {
+                logger.error("Failed to open settings from menu", toErrorPayload(error));
+              }
+            },
+          },
+          { type: "separator" as const },
           {
             label: "&Open",
             accelerator: "Ctrl+O",
