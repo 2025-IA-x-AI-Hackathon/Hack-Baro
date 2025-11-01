@@ -1,16 +1,61 @@
-import {
-  init as initSentry,
-  captureException as sentryCaptureException,
-  setContext,
-  setTag,
-} from "@sentry/node";
 import type { NodeOptions } from "@sentry/node";
 import { monitoringConfig } from "../shared/config/monitoring";
 import { getLogger } from "../shared/logger";
 
+type SentryNodeModule = typeof import("@sentry/node");
+
 const logger = getLogger("sentry-worker", "worker");
 
 let workerInitialised = false;
+
+let cachedSentryModule: SentryNodeModule | null | undefined;
+
+const isNodeRuntime = () => {
+  return (
+    typeof process !== "undefined" &&
+    process.release?.name === "node" &&
+    typeof process.versions?.node === "string"
+  );
+};
+
+const loadSentryModule = (): SentryNodeModule | null => {
+  if (cachedSentryModule !== undefined) {
+    return cachedSentryModule;
+  }
+
+  if (!isNodeRuntime()) {
+    logger.debug("Worker Sentry unavailable: Node APIs not detected");
+    cachedSentryModule = null;
+    return cachedSentryModule;
+  }
+
+  let dynamicRequire: ((specifier: string) => unknown) | null = null;
+
+  try {
+    // eslint-disable-next-line no-eval
+    dynamicRequire = (0, eval)("require") as (specifier: string) => unknown;
+  } catch (error) {
+    logger.debug("Worker Sentry unavailable: require not accessible", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  if (!dynamicRequire) {
+    cachedSentryModule = null;
+    return cachedSentryModule;
+  }
+
+  try {
+    cachedSentryModule = dynamicRequire("@sentry/node") as SentryNodeModule;
+  } catch (error) {
+    logger.warn("Failed to load @sentry/node in worker", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    cachedSentryModule = null;
+  }
+
+  return cachedSentryModule;
+};
 
 export const initWorkerSentry = () => {
   if (!monitoringConfig.sentry.enabled || workerInitialised) {
@@ -20,7 +65,13 @@ export const initWorkerSentry = () => {
     return;
   }
 
-  initSentry({
+  const sentry = loadSentryModule();
+  if (!sentry) {
+    logger.debug("Worker Sentry initialisation skipped: module unavailable");
+    return;
+  }
+
+  sentry.init({
     dsn: monitoringConfig.sentry.dsn,
     environment: monitoringConfig.environment,
     release: monitoringConfig.release,
@@ -30,8 +81,8 @@ export const initWorkerSentry = () => {
     tracesSampleRate: monitoringConfig.sentry.tracesSampleRate,
   });
 
-  setTag("process", "worker");
-  setContext("worker", {
+  sentry.setTag("process", "worker");
+  sentry.setContext("worker", {
     pid: process.pid,
     platform: process.platform,
   });
@@ -44,13 +95,25 @@ export const captureWorkerException = (error: unknown) => {
     return;
   }
 
+  const sentry = loadSentryModule();
+  if (!sentry) {
+    return;
+  }
+
   const normalisedError =
     error instanceof Error ? error : new Error(String(error));
 
-  sentryCaptureException(normalisedError);
+  sentry.captureException(normalisedError);
 };
 
 export const registerWorkerHandlers = () => {
+  if (typeof process === "undefined" || typeof process.on !== "function") {
+    logger.debug(
+      "Worker process event handlers unavailable: process hooks not supported",
+    );
+    return;
+  }
+
   process.on("uncaughtException", (error) => {
     logger.fatal("Uncaught exception in worker", {
       error: error instanceof Error ? error.message : String(error),
