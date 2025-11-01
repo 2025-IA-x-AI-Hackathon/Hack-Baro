@@ -48,6 +48,7 @@ import { getSetting, setSetting } from "./database/settingsRepository";
 import {
   getDailyPostureLogByDate,
   upsertDailyPostureLog,
+  getWeeklySummary,
 } from "./database/dailyPostureRepository";
 import registerCalibrationHandler from "./ipc/calibrationHandler";
 import MenuBuilder from "./menu";
@@ -876,6 +877,32 @@ ipcMain.handle(IPC_CHANNELS.getDailySummary, async () => {
     }
   } catch (error) {
     logger.error("Failed to get daily summary", toErrorPayload(error));
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+});
+
+ipcMain.handle(IPC_CHANNELS.getWeeklySummary, async () => {
+  try {
+    // Get weekly data from database
+    const weeklyData = getWeeklySummary();
+
+    logger.info(`Retrieved weekly summary with ${weeklyData.length} records`);
+    
+    // Transform to expected format
+    const formattedData = weeklyData.map((log) => ({
+      date: log.date,
+      score: log.avgScore,
+    }));
+
+    return {
+      success: true,
+      data: formattedData,
+    };
+  } catch (error) {
+    logger.error("Failed to get weekly summary", toErrorPayload(error));
     return {
       success: false,
       error: error instanceof Error ? error.message : String(error),
