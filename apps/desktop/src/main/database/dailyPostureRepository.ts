@@ -1,4 +1,4 @@
-import { eq, gte, lte, and } from "drizzle-orm";
+import { eq, gte, lte, and, desc } from "drizzle-orm";
 import { getLogger } from "../../shared/logger";
 import { getDatabase } from "./client";
 import {
@@ -8,6 +8,8 @@ import {
 } from "./schema";
 
 const logger = getLogger("daily-posture-repository", "main");
+
+const STREAK_THRESHOLD = 70;
 
 export const upsertDailyPostureLog = (
   data: NewDailyPostureLogRow,
@@ -34,6 +36,9 @@ export const upsertDailyPostureLog = (
             (data.avgScore ?? 0) * (data.sampleCount ?? 0)) /
           newSampleCount;
       }
+
+      // Recalculate meetsGoal based on new average score
+      const meetsGoal = newAvgScore >= 70 ? 1 : 0;
       
       const updated = db
         .update(dailyPostureLogs)
@@ -43,6 +48,7 @@ export const upsertDailyPostureLog = (
           secondsInRed: existing.secondsInRed + (data.secondsInRed ?? 0),
           avgScore: newAvgScore,
           sampleCount: newSampleCount,
+          meetsGoal,
         })
         .where(eq(dailyPostureLogs.date, data.date))
         .returning()
@@ -126,6 +132,45 @@ export const getWeeklySummary = (): DailyPostureLogRow[] => {
   } catch (error) {
     logger.error(
       `Failed to get weekly summary: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`,
+    );
+    throw error;
+  }
+};
+
+/**
+ * Calculate the current streak of consecutive days meeting the posture goal.
+ * Counts from today backwards until a day below threshold is found.
+ * @returns The current streak count
+ */
+export const calculateStreak = (): number => {
+  const db = getDatabase();
+
+  try {
+    // Query all logs ordered by date descending (most recent first)
+    const allLogs = db
+      .select()
+      .from(dailyPostureLogs)
+      .orderBy(desc(dailyPostureLogs.date))
+      .all();
+
+    let streak = 0;
+    
+    // Count consecutive days from today backwards
+    for (const log of allLogs) {
+      if (log.avgScore >= STREAK_THRESHOLD) {
+        streak++;
+      } else {
+        break; // Streak broken
+      }
+    }
+
+    logger.info(`Calculated streak: ${streak} days`);
+    return streak;
+  } catch (error) {
+    logger.error(
+      `Failed to calculate streak: ${
         error instanceof Error ? error.message : "Unknown error"
       }`,
     );
