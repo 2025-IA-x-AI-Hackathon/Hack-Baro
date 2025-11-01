@@ -146,8 +146,8 @@ describe("Main Process IPC Message Routing", () => {
       pendingMessages.push(message2);
 
       expect(pendingMessages).toHaveLength(2);
-      expect(pendingMessages[0].type).toBe(WORKER_MESSAGES.ready);
-      expect(pendingMessages[1].type).toBe(WORKER_MESSAGES.engineTick);
+      expect(pendingMessages[0]?.type).toBe(WORKER_MESSAGES.ready);
+      expect(pendingMessages[1]?.type).toBe(WORKER_MESSAGES.engineTick);
 
       // Simulate flush
       const flushed = pendingMessages.splice(0, pendingMessages.length);
