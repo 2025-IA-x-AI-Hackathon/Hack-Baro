@@ -6,17 +6,27 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
+import dotenv from "dotenv";
+import dotenvExpand from "dotenv-expand";
 import { BrowserWindow, app, ipcMain, session, shell } from "electron";
 import log from "electron-log";
 import { autoUpdater } from "electron-updater";
+import fs from "fs";
 import { Worker } from "node:worker_threads";
+import os from "os";
 import path from "path";
+import { parseBooleanFlag } from "../shared/env";
+import buildGuardrailOverridesFromRecord from "../shared/guardrails/overrides";
 import {
   IPC_CHANNELS,
   WORKER_MESSAGES,
   type WorkerMessage,
 } from "../shared/ipcChannels";
-import { getLogger } from "../shared/logger";
+import { getLogger, toErrorPayload } from "../shared/logger";
+import type { EngineFramePayload } from "../shared/types/engine-ipc";
+import type { MetricValues } from "../shared/types/metrics";
+import { isMetricValues, isRecord } from "../shared/validation/metricValues";
+// TODO: check whether `openCameraPrivacySettings` is overlapping with cameraPermissions.ts
 import {
   openCameraSettings,
   requestCameraPermission,
@@ -26,20 +36,138 @@ import MenuBuilder from "./menu";
 import { captureException } from "./sentry";
 import { resolveHtmlPath } from "./util";
 
+dotenvExpand.expand(dotenv.config());
+
 let mainWindow: BrowserWindow | null = null;
 let backgroundWorker: Worker | null = null;
 
 const pendingWorkerMessages: WorkerMessage[] = [];
 const logger = getLogger("main-process", "main");
 
+const SIGNAL_TRACE_ENABLED = parseBooleanFlag(process.env.POSELY_SIGNAL_TRACE);
+const DEFAULT_TRACE_DIR = path.join(os.homedir(), ".posely", "signal-traces");
+const DEFAULT_TRACE_DIR_RESOLVED = path.resolve(DEFAULT_TRACE_DIR);
+const SIGNAL_TRACE_FILE = process.env.POSELY_SIGNAL_TRACE_FILE
+  ? path.resolve(process.env.POSELY_SIGNAL_TRACE_FILE)
+  : null;
+let signalTraceStream: fs.WriteStream | null = null;
+let signalTracePath: string | null = null;
+let signalTraceHeaderWritten = false;
+
+const isPathWithinBase = (target: string, base: string): boolean => {
+  const relative = path.relative(base, target);
+  if (relative === "") {
+    return true;
+  }
+  return !relative.startsWith("..") && !path.isAbsolute(relative);
+};
+
+const resolveTracePath = (requested?: string | null): string => {
+  if (SIGNAL_TRACE_FILE) {
+    const resolvedRequested =
+      requested && requested.trim().length > 0 ? path.resolve(requested) : null;
+    if (resolvedRequested && resolvedRequested !== SIGNAL_TRACE_FILE) {
+      logger.warn(
+        "Ignoring renderer-provided signal trace path; using configured override instead",
+        { requestedPath: resolvedRequested, allowedPath: SIGNAL_TRACE_FILE },
+      );
+    }
+    return SIGNAL_TRACE_FILE;
+  }
+
+  if (requested && requested.trim().length > 0) {
+    const candidate = path.resolve(requested);
+    if (isPathWithinBase(candidate, DEFAULT_TRACE_DIR_RESOLVED)) {
+      return candidate;
+    }
+    logger.warn("Rejected signal trace path outside allowed directory", {
+      requestedPath: candidate,
+      allowedBase: DEFAULT_TRACE_DIR_RESOLVED,
+    });
+  }
+
+  const timestamp = new Date()
+    .toISOString()
+    .replace(/[:.]/g, "-")
+    .replace("T", "_");
+  const fileName = `signal-trace-${timestamp}.csv`;
+  return path.join(DEFAULT_TRACE_DIR_RESOLVED, fileName);
+};
+
+const ensureSignalTraceStream = (requested?: string | null): fs.WriteStream => {
+  if (signalTraceStream) {
+    return signalTraceStream;
+  }
+
+  const targetPath = resolveTracePath(
+    requested ?? signalTracePath ?? undefined,
+  );
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  const existed = fs.existsSync(targetPath);
+  const stream = fs.createWriteStream(targetPath, { flags: "a" });
+  signalTraceStream = stream;
+  signalTracePath = targetPath;
+  signalTraceHeaderWritten = existed && fs.statSync(targetPath).size > 0;
+
+  if (!signalTraceHeaderWritten) {
+    stream.write(
+      "timestamp_ms,frame_id,metric,raw,smoothed,gated,reliability_paused,outlier,confidence\n",
+    );
+    signalTraceHeaderWritten = true;
+  }
+
+  logger.info("Signal trace logging enabled", { filePath: targetPath });
+  return stream;
+};
+
+const formatSignalTraceNumber = (value: number | null): string => {
+  if (value === null) {
+    return "";
+  }
+  if (!Number.isFinite(value)) {
+    return "";
+  }
+  return String(value);
+};
+
+const appendSignalTrace = (
+  metrics: MetricValues,
+  requestedPath?: string | null,
+): void => {
+  if (!SIGNAL_TRACE_ENABLED) {
+    return;
+  }
+
+  try {
+    const stream = ensureSignalTraceStream(requestedPath);
+    const entries = Object.entries(metrics.metrics) as Array<
+      [
+        keyof MetricValues["metrics"],
+        MetricValues["metrics"][keyof MetricValues["metrics"]],
+      ]
+    >;
+    const lines = entries.map(([metric, series]) => {
+      return [
+        metrics.timestamp,
+        metrics.frameId,
+        metric,
+        formatSignalTraceNumber(series.raw),
+        formatSignalTraceNumber(series.smoothed),
+        series.gated ? "1" : "0",
+        series.reliabilityPaused ? "1" : "0",
+        series.outlier ? "1" : "0",
+        series.confidence,
+      ].join(",");
+    });
+    stream.write(`${lines.join("\n")}\n`);
+  } catch (error: unknown) {
+    logger.warn("Failed to append signal trace entry", toErrorPayload(error));
+  }
+};
+
 // SharedArrayBuffer requires both the Chromium feature flag and cross-origin isolation.
 // The COOP/COEP headers are applied in configureSecurityHeaders(). Keep these in sync.
 app.commandLine.appendSwitch("enable-features", "SharedArrayBuffer");
-
-const toErrorPayload = (error: unknown) => ({
-  error: error instanceof Error ? error.message : String(error),
-  stack: error instanceof Error ? error.stack : undefined,
-});
 
 const installExtensions = async (): Promise<void> => {
   try {
@@ -90,6 +218,21 @@ const dispatchWorkerMessage = (message: WorkerMessage) => {
         message.payload ?? null,
       );
       break;
+    case WORKER_MESSAGES.engineTick:
+      mainWindow.webContents.send(
+        IPC_CHANNELS.engineTick,
+        message.payload ?? null,
+      );
+      break;
+    case WORKER_MESSAGES.engineError:
+      logger.warn("Worker reported engine error", {
+        payload: message.payload ?? null,
+      });
+      mainWindow.webContents.send(
+        IPC_CHANNELS.workerStatus,
+        message.payload ?? null,
+      );
+      break;
     default:
       mainWindow.webContents.send(IPC_CHANNELS.workerResponse, {
         type: message.type,
@@ -128,9 +271,26 @@ const startWorker = () => {
   }
 
   const workerEntrypoint = getWorkerEntrypoint();
+  const guardrailOverrides = buildGuardrailOverridesFromRecord(
+    process.env as Record<string, string | undefined>,
+  );
+  const debugHeadPose = parseBooleanFlag(
+    process.env.POSELY_DEBUG_HEAD_POSE,
+    false,
+  );
+  const debugGuardrailsVerbose = parseBooleanFlag(
+    process.env.POSELY_DEBUG_GUARDRAILS_VERBOSE,
+    false,
+  );
 
   try {
-    backgroundWorker = new Worker(workerEntrypoint);
+    backgroundWorker = new Worker(workerEntrypoint, {
+      workerData: {
+        guardrailOverrides,
+        debugHeadPose,
+        debugGuardrailsVerbose,
+      },
+    });
     backgroundWorker.on("message", (message: WorkerMessage) => {
       dispatchWorkerMessage(message);
     });
@@ -243,23 +403,108 @@ ipcMain.on(IPC_CHANNELS.workerRequest, (event) => {
   backgroundWorker.postMessage({ type: WORKER_MESSAGES.ping });
 });
 
-ipcMain.handle(IPC_CHANNELS.TRIGGER_MAIN_ERROR, () => {
+ipcMain.handle(IPC_CHANNELS.triggerMainError, () => {
   throw new Error("Intentional Main Process Error from Renderer");
 });
 
-ipcMain.on(IPC_CHANNELS.TRIGGER_WORKER_ERROR, () => {
+// TODO: check whether `openCameraPrivacySettings` is overlapping with cameraPermissions.ts (`IPC_CHANNELS.requestCameraPermission`, `IPC_CHANNELS.openCameraSettings`)
+ipcMain.handle(IPC_CHANNELS.openCameraPrivacySettings, async () => {
+  const { platform } = process;
+  const targets: Record<string, string> = {
+    darwin:
+      "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera",
+    win32: "ms-settings:privacy-webcam",
+  };
+
+  const fallbackUrl = "https://support.apple.com/en-us/HT211193";
+  const target = targets[platform] ?? fallbackUrl;
+
+  try {
+    await shell.openExternal(target);
+    return { opened: true };
+  } catch (error: unknown) {
+    logger.error(
+      "Failed to open camera privacy settings",
+      toErrorPayload(error),
+    );
+    throw error;
+  }
+});
+
+ipcMain.on(IPC_CHANNELS.triggerWorkerError, () => {
   if (backgroundWorker) {
     backgroundWorker.postMessage({
-      type: WORKER_MESSAGES.TRIGGER_WORKER_ERROR,
+      type: WORKER_MESSAGES.triggerWorkerError,
     });
   }
 });
 
-ipcMain.handle(IPC_CHANNELS.REQUEST_CAMERA_PERMISSION, () =>
+ipcMain.on(IPC_CHANNELS.signalTraceAppend, (_event, payload: unknown) => {
+  if (!SIGNAL_TRACE_ENABLED) {
+    return;
+  }
+
+  if (!isRecord(payload)) {
+    return;
+  }
+
+  const metricsCandidate = payload.metrics;
+  if (!isMetricValues(metricsCandidate)) {
+    return;
+  }
+  const metrics = metricsCandidate;
+
+  const filePath =
+    typeof payload.filePath === "string" ? payload.filePath : null;
+
+  appendSignalTrace(metrics, filePath);
+});
+
+const isEngineFramePayload = (value: unknown): value is EngineFramePayload => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const payload = value as EngineFramePayload;
+  return (
+    payload.result !== undefined &&
+    typeof payload.result.frameId === "number" &&
+    Number.isFinite(payload.result.frameId) &&
+    typeof payload.result.processedAt === "number"
+  );
+};
+
+ipcMain.on(IPC_CHANNELS.engineFrame, (_event, payload: unknown) => {
+  if (!backgroundWorker) {
+    logger.warn("Engine frame received before worker initialised", {
+      payload,
+    });
+    return;
+  }
+
+  if (!isEngineFramePayload(payload)) {
+    logger.warn("Rejected invalid engine frame payload", { payload });
+    return;
+  }
+
+  backgroundWorker.postMessage({
+    type: WORKER_MESSAGES.engineFrame,
+    payload,
+  });
+});
+
+app.on("before-quit", () => {
+  if (signalTraceStream) {
+    signalTraceStream.end();
+    signalTraceStream = null;
+    signalTracePath = null;
+    signalTraceHeaderWritten = false;
+  }
+});
+ipcMain.handle(IPC_CHANNELS.requestCameraPermission, () =>
   requestCameraPermission(),
 );
 
-ipcMain.handle(IPC_CHANNELS.OPEN_CAMERA_SETTINGS, () => openCameraSettings());
+ipcMain.handle(IPC_CHANNELS.openCameraSettings, () => openCameraSettings());
 
 if (process.env.NODE_ENV === "production") {
   import("source-map-support")
@@ -403,6 +648,7 @@ const createWindow = async () => {
       mainWindow.minimize();
     } else {
       mainWindow.show();
+      mainWindow.focus();
     }
   });
 
@@ -454,6 +700,7 @@ app.on("window-all-closed", () => {
 
 const onAppReady = async () => {
   configureSecurityHeaders();
+  registerCalibrationHandler();
   // In production, avoid relative file reads resolving to protected folders like Desktop
   if (!isDebug) {
     try {
@@ -467,7 +714,6 @@ const onAppReady = async () => {
     }
   }
   startWorker();
-  registerCalibrationHandler();
   await createWindow();
   app.on("activate", () => {
     // On macOS it's common to re-create a window in the app when the
