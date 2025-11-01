@@ -285,6 +285,7 @@ if (isDebug) {
     .then(({ default: electronDebug }) => {
       return electronDebug({
         showDevTools: process.env.ENABLE_DEVTOOLS_EXTENSIONS === "true",
+        devToolsMode: "detach",
       });
     })
     .catch((error: unknown) => {
