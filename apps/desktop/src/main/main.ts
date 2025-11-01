@@ -45,6 +45,10 @@ import {
 } from "./cameraPermissions";
 import { initializeDatabase } from "./database/client";
 import { getSetting, setSetting } from "./database/settingsRepository";
+import {
+  getDailyPostureLogByDate,
+  upsertDailyPostureLog,
+} from "./database/dailyPostureRepository";
 import registerCalibrationHandler from "./ipc/calibrationHandler";
 import MenuBuilder from "./menu";
 import { captureException } from "./sentry";
@@ -256,6 +260,29 @@ const dispatchWorkerMessage = (message: WorkerMessage) => {
         message.payload ?? null,
       );
       break;
+    case WORKER_MESSAGES.persistPostureData: {
+      // Handle persisting posture data to database
+      const payload = message.payload as {
+        date: string;
+        secondsInGreen: number;
+        secondsInYellow: number;
+        secondsInRed: number;
+        avgScore: number;
+        sampleCount: number;
+      } | undefined;
+
+      if (payload) {
+        try {
+          upsertDailyPostureLog(payload);
+          logger.info("Successfully persisted posture data", { date: payload.date });
+        } catch (error) {
+          logger.error("Failed to persist posture data", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+      break;
+    }
     default:
       mainWindow.webContents.send(IPC_CHANNELS.workerResponse, {
         type: message.type,
@@ -810,6 +837,49 @@ ipcMain.handle(IPC_CHANNELS.reCalibrate, () => {
   } catch (error) {
     logger.error("Failed to trigger re-calibration", toErrorPayload(error));
     return { success: false, error: String(error) };
+  }
+});
+
+ipcMain.handle(IPC_CHANNELS.getDailySummary, async () => {
+  try {
+    const currentDate = new Date().toISOString().split("T")[0] ?? "";
+    
+    // Get data from database
+    const dbData = getDailyPostureLogByDate(currentDate);
+
+    if (dbData) {
+      logger.info("Retrieved daily summary from database", { date: currentDate });
+      return {
+        success: true,
+        data: {
+          date: dbData.date,
+          secondsInGreen: dbData.secondsInGreen,
+          secondsInYellow: dbData.secondsInYellow,
+          secondsInRed: dbData.secondsInRed,
+          avgScore: dbData.avgScore,
+          sampleCount: dbData.sampleCount,
+        },
+      };
+    } else {
+      logger.info("No daily summary data found for today", { date: currentDate });
+      return {
+        success: true,
+        data: {
+          date: currentDate,
+          secondsInGreen: 0,
+          secondsInYellow: 0,
+          secondsInRed: 0,
+          avgScore: 0,
+          sampleCount: 0,
+        },
+      };
+    }
+  } catch (error) {
+    logger.error("Failed to get daily summary", toErrorPayload(error));
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 });
 

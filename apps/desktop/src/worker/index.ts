@@ -6,6 +6,7 @@ import type {
   EngineFramePayload,
   EngineTickPayload,
 } from "../shared/types/engine-ipc";
+import type { ScoreZone } from "../shared/types/score";
 import {
   type DetectionGuardrailOverrides,
   updateDetectionGuardrailConfig,
@@ -29,6 +30,106 @@ const logger = getLogger("worker-runtime", "worker");
 const engineCoordinator = new EngineCoordinator();
 let lastEngineFrameTimestamp: number | null = null;
 let isAnalysisPaused = false;
+
+// Posture data accumulator for the current day
+type PostureAccumulator = {
+  date: string; // YYYY-MM-DD format
+  secondsInGreen: number;
+  secondsInYellow: number;
+  secondsInRed: number;
+  scoreSum: number;
+  sampleCount: number;
+  lastTickTimestamp: number | null;
+};
+
+let postureAccumulator: PostureAccumulator = {
+  date: new Date().toISOString().split("T")[0] ?? "",
+  secondsInGreen: 0,
+  secondsInYellow: 0,
+  secondsInRed: 0,
+  scoreSum: 0,
+  sampleCount: 0,
+  lastTickTimestamp: null,
+};
+
+const getCurrentDate = (): string => {
+  return new Date().toISOString().split("T")[0] ?? ""; // YYYY-MM-DD
+};
+
+const resetAccumulatorIfNewDay = () => {
+  const currentDate = getCurrentDate();
+  if (postureAccumulator.date !== currentDate) {
+    logger.info(`New day detected, persisting final data for ${postureAccumulator.date} before reset`);
+    
+    // Persist the previous day's final data before resetting
+    persistPostureData();
+    
+    logger.info(`Resetting accumulator for new day: ${currentDate}`);
+    postureAccumulator = {
+      date: currentDate,
+      secondsInGreen: 0,
+      secondsInYellow: 0,
+      secondsInRed: 0,
+      scoreSum: 0,
+      sampleCount: 0,
+      lastTickTimestamp: null,
+    };
+  }
+};
+
+const updatePostureAccumulator = (zone: ScoreZone, score: number, timestamp: number) => {
+  resetAccumulatorIfNewDay();
+
+  // Calculate elapsed time since last tick (in seconds)
+  // Assume ticks come roughly every second, but we calculate based on actual time difference
+  const elapsedSeconds =
+    postureAccumulator.lastTickTimestamp !== null
+      ? Math.min((timestamp - postureAccumulator.lastTickTimestamp) / 1000, 5) // Cap at 5 seconds to avoid anomalies
+      : 1; // First tick, assume 1 second
+
+  // Increment zone seconds
+  if (zone === "GREEN") {
+    postureAccumulator.secondsInGreen += elapsedSeconds;
+  } else if (zone === "YELLOW") {
+    postureAccumulator.secondsInYellow += elapsedSeconds;
+  } else if (zone === "RED") {
+    postureAccumulator.secondsInRed += elapsedSeconds;
+  }
+
+  // Update score sum and sample count
+  postureAccumulator.scoreSum += score;
+  postureAccumulator.sampleCount += 1;
+  postureAccumulator.lastTickTimestamp = timestamp;
+};
+
+const persistPostureData = () => {
+  if (postureAccumulator.sampleCount === 0) {
+    logger.info("No posture data to persist");
+    return;
+  }
+
+  const avgScore = postureAccumulator.scoreSum / postureAccumulator.sampleCount;
+
+  const payload = {
+    date: postureAccumulator.date,
+    secondsInGreen: Math.round(postureAccumulator.secondsInGreen),
+    secondsInYellow: Math.round(postureAccumulator.secondsInYellow),
+    secondsInRed: Math.round(postureAccumulator.secondsInRed),
+    avgScore: Math.round(avgScore * 100) / 100, // Round to 2 decimal places
+    sampleCount: postureAccumulator.sampleCount,
+  };
+
+  logger.info("Persisting posture data", payload);
+
+  postMessage({
+    type: WORKER_MESSAGES.persistPostureData,
+    payload,
+  });
+};
+
+// Set up periodic persistence (every 60 seconds)
+const PERSIST_INTERVAL_MS = 60 * 1000; // 60 seconds
+setInterval(persistPostureData, PERSIST_INTERVAL_MS);
 
 type WorkerInitPayload = {
   guardrailOverrides?: DetectionGuardrailOverrides;
@@ -104,6 +205,13 @@ const handleEngineFrame = (payload: EngineFramePayload) => {
     };
 
     postMessage(message);
+
+    // Update posture accumulator with tick data
+    updatePostureAccumulator(
+      update.tick.zone,
+      update.tick.score,
+      update.tick.t,
+    );
   } catch (error) {
     logger.error("EngineCoordinator update failed", {
       error: error instanceof Error ? error.message : String(error),
@@ -149,6 +257,27 @@ port.on("message", (message: WorkerMessage) => {
           paused: isAnalysisPaused,
         });
       }
+      break;
+    }
+    case WORKER_MESSAGES.getDailySummary: {
+      // The worker doesn't have database access, so it will return current accumulator data
+      // The main process will need to fetch from the database
+      postMessage({
+        type: WORKER_MESSAGES.dailySummaryResponse,
+        payload: {
+          currentAccumulator: {
+            date: postureAccumulator.date,
+            secondsInGreen: Math.round(postureAccumulator.secondsInGreen),
+            secondsInYellow: Math.round(postureAccumulator.secondsInYellow),
+            secondsInRed: Math.round(postureAccumulator.secondsInRed),
+            avgScore:
+              postureAccumulator.sampleCount > 0
+                ? Math.round((postureAccumulator.scoreSum / postureAccumulator.sampleCount) * 100) / 100
+                : 0,
+            sampleCount: postureAccumulator.sampleCount,
+          },
+        },
+      });
       break;
     }
     default: {
