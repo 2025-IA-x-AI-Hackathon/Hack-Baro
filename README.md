@@ -22,7 +22,7 @@ Posely is a cross-platform desktop application that monitors posture entirely on
 
 1. Clone the repository and install dependencies:
    ```bash
-   git clone https://github.com/team-baro/baro.git
+   git clone https://github.com/2025-IA-x-AI-Hackathon/Hack-Baro/baro.git
    cd baro
    pnpm install
    ```
