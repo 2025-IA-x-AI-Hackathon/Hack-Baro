@@ -23,7 +23,8 @@
     ".erb/configs",
     ".erb/scripts",
     "scripts",
-    "assets/**/*.d.ts"
+    "assets/**/*.d.ts",
+    "vitest.config.ts"
   ],
   "exclude": ["release/build", "release/app/dist", ".erb/dll"]
 }
