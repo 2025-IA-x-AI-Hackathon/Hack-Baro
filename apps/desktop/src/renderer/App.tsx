@@ -16,7 +16,6 @@ import { getLogger } from "../shared/logger";
 import type { DetectorKind } from "../shared/types/detector";
 import { ExampleHeroUI } from "./components/ExampleHeroUI";
 import { LanguageSwitcher } from "./components/LanguageSwitcher";
-import { OnboardingWizard } from "./components/onboarding/OnboardingWizard";
 import { useDetectionPipeline } from "./detection/useDetectionPipeline";
 import { OnboardingWizardV2 } from "./components/onboarding/OnboardingWizardV2";
 import "./styles/globals.css";
@@ -96,7 +95,10 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
           IPC_CHANNELS.getSetting,
           "onboardingCompleted",
         );
-        setOnboardingCompleted(result === "true");
+        logger.info("Renderer onboarding check", { result, type: typeof result });
+        const completed = result === "true";
+        logger.info("Setting onboarding completed state", { completed });
+        setOnboardingCompleted(completed);
       } catch (error) {
         logger.error("Failed to check onboarding status", { error });
         setOnboardingCompleted(false);
@@ -242,6 +244,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
 
   // Show loading state while checking onboarding status
   if (onboardingCompleted === null) {
+    logger.info("Showing loading state, onboarding status not yet determined");
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-amber-300 via-rose-500 to-indigo-700">
         <Card className="bg-white/10 p-10 text-center text-white backdrop-blur">
@@ -255,6 +258,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
 
   // Show onboarding wizard if not completed
   if (!onboardingCompleted) {
+    logger.info("Showing onboarding wizard", { onboardingCompleted });
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-amber-300 via-rose-500 to-indigo-700">
         <OnboardingWizardV2
@@ -265,6 +269,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
     );
   }
 
+  logger.info("Showing main dashboard, onboarding completed");
   return (
     <div className="flex flex-col gap-8">
       {/* Main app content */}
