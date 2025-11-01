@@ -1,9 +1,9 @@
 // Check if the renderer and main bundles are built
-import path from 'path';
-import chalk from 'chalk';
-import fs from 'fs';
-import { TextEncoder, TextDecoder } from 'node:util';
-import webpackPathsRaw from '../configs/webpack.paths.js';
+import chalk from "chalk";
+import fs from "fs";
+import { TextDecoder, TextEncoder } from "node:util";
+import path from "path";
+import webpackPathsRaw from "../configs/webpack.paths.js";
 
 type RequiredWebpackPaths = {
   distMainPath: string;
@@ -12,8 +12,8 @@ type RequiredWebpackPaths = {
 
 const webpackPaths = webpackPathsRaw as RequiredWebpackPaths;
 
-const mainPath = path.join(webpackPaths.distMainPath, 'main.js');
-const rendererPath = path.join(webpackPaths.distRendererPath, 'renderer.js');
+const mainPath = path.join(webpackPaths.distMainPath, "main.js");
+const rendererPath = path.join(webpackPaths.distRendererPath, "renderer.js");
 
 if (!fs.existsSync(mainPath)) {
   throw new Error(
