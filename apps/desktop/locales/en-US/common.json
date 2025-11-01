@@ -32,5 +32,24 @@
     "workerBooting": "Worker booting…",
     "workerResponse": "Worker Response",
     "workerStatus": "Worker Status"
+  },
+  "camera": {
+    "title": "Enable Camera Access",
+    "description": "Posely needs access to your camera to analyze posture in real time.",
+    "requestButton": "Allow Camera",
+    "requesting": "Waiting for the camera permission prompt…",
+    "deniedTitle": "Camera access is blocked",
+    "deniedDescription": "Enable camera access so Posely can capture frames for posture analysis.",
+    "openSettings": "Open System Settings",
+    "retry": "Try Again",
+    "revoked": "Camera access was disabled while Posely was running. Re-enable it in System Settings to resume posture analysis.",
+    "errorTitle": "Camera access unavailable",
+    "errorDescription": "We couldn't access your camera. Check your device connection and privacy settings.",
+    "statusWaiting": "Waiting for camera permission…",
+    "instructions": {
+      "openSettings": "Open System Settings",
+      "privacySecurityCamera": "Navigate to Privacy & Security → Camera",
+      "togglePosely": "Enable Posely"
+    }
   }
 }
