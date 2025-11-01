@@ -28,6 +28,7 @@ const logger = getLogger("worker-runtime", "worker");
 
 const engineCoordinator = new EngineCoordinator();
 let lastEngineFrameTimestamp: number | null = null;
+let isAnalysisPaused = false;
 
 type WorkerInitPayload = {
   guardrailOverrides?: DetectionGuardrailOverrides;
@@ -70,6 +71,11 @@ const isEngineFramePayload = (value: unknown): value is EngineFramePayload => {
 };
 
 const handleEngineFrame = (payload: EngineFramePayload) => {
+  // Skip processing if analysis is paused
+  if (isAnalysisPaused) {
+    return;
+  }
+
   try {
     const diagnostics = payload.diagnostics ?? null;
     const frameIntervalMs =
@@ -134,6 +140,16 @@ port.on("message", (message: WorkerMessage) => {
     }
     case WORKER_MESSAGES.triggerWorkerError: {
       throw new Error("Intentional Worker Error");
+    }
+    case WORKER_MESSAGES.setPaused: {
+      const payload = message.payload as { paused?: boolean } | undefined;
+      if (payload && typeof payload.paused === "boolean") {
+        isAnalysisPaused = payload.paused;
+        logger.info(`Worker analysis ${isAnalysisPaused ? "paused" : "resumed"}`, {
+          paused: isAnalysisPaused,
+        });
+      }
+      break;
     }
     default: {
       postMessage({
