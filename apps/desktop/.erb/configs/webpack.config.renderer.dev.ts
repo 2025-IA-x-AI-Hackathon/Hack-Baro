@@ -132,6 +132,10 @@ const configuration: webpack.Configuration = {
           "file-loader",
         ],
       },
+      {
+        test: /\.(wasm|task|bin)$/i,
+        type: "asset/resource",
+      },
     ],
   },
   plugins: [
@@ -193,7 +197,12 @@ const configuration: webpack.Configuration = {
     port,
     compress: true,
     hot: true,
-    headers: { "Access-Control-Allow-Origin": "*" },
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+      'Cross-Origin-Resource-Policy': 'same-origin',
+    },
     static: {
       publicPath: "/",
     },

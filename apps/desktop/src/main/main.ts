@@ -6,7 +6,7 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
-import { BrowserWindow, app, ipcMain, shell } from "electron";
+import { BrowserWindow, app, ipcMain, session, shell } from "electron";
 import log from "electron-log";
 import { autoUpdater } from "electron-updater";
 import { Worker } from "node:worker_threads";
@@ -32,6 +32,10 @@ let backgroundWorker: Worker | null = null;
 
 const pendingWorkerMessages: WorkerMessage[] = [];
 const logger = getLogger("main-process", "main");
+
+// SharedArrayBuffer requires both the Chromium feature flag and cross-origin isolation.
+// The COOP/COEP headers are applied in configureSecurityHeaders(). Keep these in sync.
+app.commandLine.appendSwitch("enable-features", "SharedArrayBuffer");
 
 const toErrorPayload = (error: unknown) => ({
   error: error instanceof Error ? error.message : String(error),
@@ -169,6 +173,48 @@ const startWorker = () => {
   return backgroundWorker;
 };
 
+let securityConfigured = false;
+
+const configureSecurityHeaders = () => {
+  if (securityConfigured) {
+    return;
+  }
+
+  const { defaultSession } = session;
+
+  defaultSession.setPermissionRequestHandler(
+    (webContents, permission, callback) => {
+      if (permission === "media") {
+        callback(true);
+        return;
+      }
+
+      logger.warn("Permission request denied", {
+        url: webContents.getURL(),
+        permission,
+      });
+      callback(false);
+    },
+  );
+
+  defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const baseHeaders =
+      details.responseHeaders || ({} as Record<string, string[]>);
+    const responseHeaders = {
+      ...baseHeaders,
+      "Cross-Origin-Opener-Policy": ["same-origin"],
+      "Cross-Origin-Embedder-Policy": ["require-corp"],
+      "Cross-Origin-Resource-Policy": ["same-origin"],
+    } as Record<string, string[]>;
+
+    callback({
+      responseHeaders,
+    });
+  });
+
+  securityConfigured = true;
+};
+
 ipcMain.on(IPC_CHANNELS.rendererPing, (event, arg) => {
   if (arg === "error") {
     throw new Error("Intentional Main Process Error");
@@ -272,6 +318,7 @@ if (isDebug) {
     .then(({ default: electronDebug }) => {
       return electronDebug({
         showDevTools: process.env.ENABLE_DEVTOOLS_EXTENSIONS === "true",
+        devToolsMode: "detach",
       });
     })
     .catch((error: unknown) => {
@@ -318,6 +365,13 @@ const createWindow = async () => {
       preload: app.isPackaged
         ? path.join(__dirname, "preload.js")
         : path.join(__dirname, "../../.erb/dll/preload.js"),
+      nodeIntegration: false,
+      contextIsolation: true,
+      // Keep sandbox disabled in dev by default. You can opt-in by
+      // setting ELECTRON_SANDBOX=true when starting the app.
+      sandbox: process.env.ELECTRON_SANDBOX === "true",
+      webSecurity: true,
+      enableBlinkFeatures: "SharedArrayBuffer",
     },
   });
 
@@ -325,11 +379,67 @@ const createWindow = async () => {
     // Load onboarding page
   }
 
-  await mainWindow.loadURL(resolveHtmlPath("index.html"));
+  // Build URL and pass dev-time feature flags to renderer via query params
+  const baseUrl = resolveHtmlPath("index.html");
+  const url = new URL(baseUrl);
+  if (process.env.PREFER_CONTINUITY_CAMERA === "true") {
+    url.searchParams.set("preferContinuityCamera", "1");
+  }
+
 
   mainWindow.webContents.once("did-finish-load", () => {
     flushPendingWorkerMessages();
+    // In production ensure the window becomes visible after content is loaded
+    if (!isDebug) {
+      try {
+        if (process.env.START_MINIMIZED) {
+          mainWindow?.minimize();
+        } else {
+          mainWindow?.show();
+        }
+      } catch (err: unknown) {
+        logger.warn(
+          "Failed to show window after did-finish-load",
+          toErrorPayload(err),
+        );
+      }
+    }
   });
+
+  // Dev-only fallbacks to avoid invisible window on early renderer issues
+  if (isDebug && mainWindow) {
+    mainWindow.webContents.on(
+      "did-fail-load",
+      (_e, code, desc, validatedURL) => {
+        logger.error("Renderer failed to load", { code, desc, validatedURL });
+        try {
+          mainWindow?.show();
+          if (process.env.DEVTOOLS_OPEN_ON_FALLBACK === "true") {
+            mainWindow?.webContents.openDevTools({ mode: "detach" });
+          }
+        } catch (err: unknown) {
+          logger.warn(
+            "Failed to show window after load failure",
+            toErrorPayload(err),
+          );
+        }
+      },
+    );
+
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isVisible()) {
+        logger.warn("Forcing window visible in dev (fallback show)");
+        try {
+          mainWindow.show();
+          if (process.env.DEVTOOLS_OPEN_ON_FALLBACK === "true") {
+            mainWindow.webContents.openDevTools({ mode: "detach" });
+          }
+        } catch (err: unknown) {
+          logger.warn("Fallback show failed", toErrorPayload(err));
+        }
+      }
+    }, 3000);
+  }
 
   mainWindow.on("ready-to-show", () => {
     if (!mainWindow) {
@@ -389,6 +499,19 @@ app.on("window-all-closed", () => {
 });
 
 const onAppReady = async () => {
+  configureSecurityHeaders();
+  // In production, avoid relative file reads resolving to protected folders like Desktop
+  if (!isDebug) {
+    try {
+      const logsDir = app.getPath("userData");
+      process.chdir(logsDir);
+      logger.info("Changed working directory for safety", {
+        cwd: process.cwd(),
+      });
+    } catch (err: unknown) {
+      logger.warn("Failed to change working directory", toErrorPayload(err));
+    }
+  }
   startWorker();
   try {
     const { initializeDatabase } = await import("./database/client.js");

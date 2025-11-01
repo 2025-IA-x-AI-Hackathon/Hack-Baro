@@ -13,8 +13,11 @@ import { useTranslation } from "react-i18next";
 import icon from "../../assets/icon.svg";
 import { IPC_CHANNELS } from "../shared/ipcChannels";
 import { getLogger } from "../shared/logger";
+import type { DetectorKind } from "../shared/types/detector";
 import { ExampleHeroUI } from "./components/ExampleHeroUI";
 import { LanguageSwitcher } from "./components/LanguageSwitcher";
+import { OnboardingWizard } from "./components/onboarding/OnboardingWizard";
+import { useDetectionPipeline } from "./detection/useDetectionPipeline";
 import { OnboardingWizardV2 } from "./components/onboarding/OnboardingWizardV2";
 import "./styles/globals.css";
 
@@ -78,6 +81,13 @@ const markAsCustom = (value: string): MessageState => ({
 
 function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
   const { t } = useTranslation(["common"]);
+  const preferredDetector =
+    (electron.env?.POSELY_DETECTOR as DetectorKind | undefined) ?? "mediapipe";
+  const detection = useDetectionPipeline({ detector: preferredDetector });
+  const detectionMetrics = detection.metrics;
+  const formatMs = useCallback((value?: number) => {
+    return value === undefined ? "0.0" : value.toFixed(1);
+  }, []);
   const channels = useMemo(() => electron.channels ?? IPC_CHANNELS, [electron]);
   const { ipcRenderer } = electron;
 
@@ -331,6 +341,74 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
             <Code className="whitespace-pre-wrap break-words text-sm">
               {workerResponse.value}
             </Code>
+          </CardBody>
+        </Card>
+        <Card className="bg-black/30 text-left backdrop-blur-lg">
+          <CardHeader className="flex flex-col gap-1 text-white">
+            <span className="text-sm uppercase tracking-wide text-white/60">
+              Detection Pipeline
+            </span>
+            <h2 className="text-lg font-semibold text-white">
+              Pipeline Status
+            </h2>
+          </CardHeader>
+          <CardBody className="flex flex-col gap-2 text-sm text-white/85">
+            <div className="flex justify-between">
+              <span>Status</span>
+              <span className="font-semibold capitalize">
+                {detection.status}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Detector</span>
+              <span className="font-semibold capitalize">
+                {detectionMetrics?.detector ?? preferredDetector}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Cross-Origin Isolated</span>
+              <span className="font-semibold">
+                {detectionMetrics?.crossOriginIsolated ? "true" : "false"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Frames Processed</span>
+              <span className="font-semibold">
+                {detectionMetrics?.framesProcessed ?? 0}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Frames Skipped</span>
+              <span className="font-semibold">
+                {detectionMetrics?.framesSkipped ?? 0}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Frames Dropped (busy)</span>
+              <span className="font-semibold">
+                {detectionMetrics?.framesDroppedWhileBusy ?? 0}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Inference (avg ms)</span>
+              <span className="font-semibold">
+                {formatMs(detectionMetrics?.averageInferenceMs)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Downscale (avg ms)</span>
+              <span className="font-semibold">
+                {formatMs(detectionMetrics?.averageDownscaleMs)}
+              </span>
+            </div>
+            {detection.error ? (
+              <Code
+                color="danger"
+                className="whitespace-pre-wrap break-words text-xs"
+              >
+                {detection.error}
+              </Code>
+            ) : null}
           </CardBody>
         </Card>
       </section>

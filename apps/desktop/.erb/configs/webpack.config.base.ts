@@ -27,7 +27,7 @@ const configuration: webpack.Configuration = {
   module: {
     rules: [
       {
-        test: /\.[jt]sx?$/,
+        test: /\.[cm]?[jt]sx?$/,
         exclude: (modulePath: string) => {
           if (!modulePath) {
             return false;
@@ -66,7 +66,7 @@ const configuration: webpack.Configuration = {
    * Determine the array of extensions that should be used to resolve modules.
    */
   resolve: {
-    extensions: [".js", ".jsx", ".json", ".ts", ".tsx"],
+    extensions: [".js", ".jsx", ".json", ".ts", ".tsx", ".mts", ".cts"],
     modules: [webpackPaths.srcPath, workspacePackagesPath, "node_modules"],
     extensionAlias: {
       ".js": [".ts", ".tsx", ".js"],
