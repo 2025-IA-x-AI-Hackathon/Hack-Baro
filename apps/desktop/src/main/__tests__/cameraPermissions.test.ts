@@ -116,14 +116,24 @@ describe('cameraPermissions', () => {
     expect(result).toEqual({ success: true });
   });
 
-  it('returns an error for unsupported platforms', async () => {
+  it('opens gnome-control-center on Linux', async () => {
     setPlatform('linux');
+    openExternal.mockResolvedValueOnce(undefined);
+
+    const result = await openCameraSettings();
+
+    expect(openExternal).toHaveBeenCalledWith('gnome-control-center://camera');
+    expect(result).toEqual({ success: true });
+  });
+
+  it('returns an error for unsupported platforms', async () => {
+    setPlatform('freebsd' as PlatformName);
 
     const result = await openCameraSettings();
 
     expect(openExternal).not.toHaveBeenCalled();
     expect(result.success).toBe(false);
-    expect(result.error).toContain('linux');
+    expect(result.error).toContain('freebsd');
   });
 
   it('captures exceptions when opening settings fails', async () => {
