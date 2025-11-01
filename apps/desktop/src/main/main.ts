@@ -40,6 +40,7 @@ import {
   openCameraSettings,
   requestCameraPermission,
 } from "./cameraPermissions";
+import { initializeDatabase } from "./database/client";
 import { getSetting, setSetting } from "./database/settingsRepository";
 import registerCalibrationHandler from "./ipc/calibrationHandler";
 import MenuBuilder from "./menu";
@@ -55,6 +56,7 @@ dotenvExpand.expand(dotenv.config());
 let mainWindow: BrowserWindow | null = null;
 let backgroundWorker: Worker | null = null;
 let tray: Tray | null = null;
+let isPaused = false;
 
 const pendingWorkerMessages: WorkerMessage[] = [];
 const logger = getLogger("main-process", "main");
@@ -389,31 +391,16 @@ const configureSecurityHeaders = () => {
   securityConfigured = true;
 };
 
-const createTray = () => {
-  if (tray) {
-    return tray;
-  }
+const buildTrayMenu = (): Electron.Menu => {
+  const statusLabel = isPaused ? "Status: Paused" : "Status: Monitoring";
+  const pauseResumeLabel = isPaused ? "Resume Monitoring" : "Pause Monitoring";
 
-  const RESOURCES_PATH = app.isPackaged
-    ? path.join(process.resourcesPath, "assets")
-    : path.join(__dirname, "../../assets");
-
-  const getAssetPath = (...paths: string[]): string => {
-    return path.join(RESOURCES_PATH, ...paths);
-  };
-
-  // Create a simple 16x16 gray circle icon
-  const trayIconPath = getAssetPath("icons", "16x16.png");
-
-  // Create native image and resize for tray
-  const icon = nativeImage.createFromPath(trayIconPath);
-  const trayIcon = icon.resize({ width: 16, height: 16 });
-
-  tray = new Tray(trayIcon);
-  tray.setToolTip("Posely - Posture Monitor");
-
-  // Create context menu for tray
-  const contextMenu = ElectronMenu.buildFromTemplate([
+  return ElectronMenu.buildFromTemplate([
+    {
+      label: statusLabel,
+      enabled: false,
+    },
+    { type: "separator" },
     {
       label: "Show Dashboard",
       click: () => {
@@ -429,15 +416,105 @@ const createTray = () => {
         createSettingsWindow();
       },
     },
+    {
+      label: pauseResumeLabel,
+      click: () => {
+        togglePauseState();
+      },
+    },
     { type: "separator" },
     {
-      label: "Quit",
+      label: "Quit Posely",
       click: () => {
         app.quit();
       },
     },
   ]);
+};
 
+const updateTrayIcon = () => {
+  if (!tray) {
+    return;
+  }
+
+  const RESOURCES_PATH = app.isPackaged
+    ? path.join(process.resourcesPath, "assets")
+    : path.join(__dirname, "../../assets");
+
+  const getAssetPath = (...paths: string[]): string => {
+    return path.join(RESOURCES_PATH, ...paths);
+  };
+
+  const iconFileName = isPaused ? "16x16-paused.png" : "16x16.png";
+  const trayIconPath = getAssetPath("icons", iconFileName);
+
+  const icon = nativeImage.createFromPath(trayIconPath);
+  const trayIcon = icon.resize({ width: 16, height: 16 });
+
+  tray.setImage(trayIcon);
+};
+
+const updateTrayMenu = () => {
+  if (!tray) {
+    return;
+  }
+
+  const contextMenu = buildTrayMenu();
+  tray.setContextMenu(contextMenu);
+};
+
+const togglePauseState = () => {
+  isPaused = !isPaused;
+  
+  // Update tray icon
+  updateTrayIcon();
+  
+  // Update tray menu
+  updateTrayMenu();
+
+  // Send message to worker
+  if (backgroundWorker) {
+    backgroundWorker.postMessage({
+      type: WORKER_MESSAGES.setPaused,
+      payload: { paused: isPaused },
+    });
+  }
+
+  // Broadcast to all renderer windows
+  if (mainWindow) {
+    mainWindow.webContents.send(IPC_CHANNELS.appStatusChanged, {
+      isPaused,
+    });
+  }
+
+  logger.info(`Monitoring ${isPaused ? "paused" : "resumed"}`, { isPaused });
+};
+
+const createTray = () => {
+  if (tray) {
+    return tray;
+  }
+
+  const RESOURCES_PATH = app.isPackaged
+    ? path.join(process.resourcesPath, "assets")
+    : path.join(__dirname, "../../assets");
+
+  const getAssetPath = (...paths: string[]): string => {
+    return path.join(RESOURCES_PATH, ...paths);
+  };
+
+  // Create a simple 16x16 icon
+  const trayIconPath = getAssetPath("icons", "16x16.png");
+
+  // Create native image and resize for tray
+  const icon = nativeImage.createFromPath(trayIconPath);
+  const trayIcon = icon.resize({ width: 16, height: 16 });
+
+  tray = new Tray(trayIcon);
+  tray.setToolTip("Posely - Posture Monitor");
+
+  // Create context menu for tray using dynamic builder
+  const contextMenu = buildTrayMenu();
   tray.setContextMenu(contextMenu);
 
   // On macOS, clicking the tray icon should show the main window
@@ -819,6 +896,9 @@ const createWindow = async () => {
   const menuBuilder = new MenuBuilder(mainWindow);
   menuBuilder.buildMenu();
 
+  // Create system tray
+  createTray();
+
   // Open urls in the user's browser
   mainWindow.webContents.setWindowOpenHandler((edata) => {
     shell.openExternal(edata.url).catch((error: unknown) => {
@@ -864,6 +944,15 @@ app.on("window-all-closed", () => {
 });
 
 const onAppReady = async () => {
+  // Initialize database before any other operations that might need it
+  try {
+    initializeDatabase();
+    logger.info("Database initialized successfully");
+  } catch (error: unknown) {
+    logger.error("Failed to initialize database", toErrorPayload(error));
+    throw error;
+  }
+
   configureSecurityHeaders();
   registerCalibrationHandler();
   // In production, avoid relative file reads resolving to protected folders like Desktop
