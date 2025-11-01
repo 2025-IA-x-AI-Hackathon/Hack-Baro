@@ -6,7 +6,7 @@ import {
   expect,
   it,
   vi,
-} from 'vitest';
+} from "vitest";
 
 const askForMediaAccess = vi.fn();
 const openExternal = vi.fn();
@@ -15,7 +15,7 @@ const getLogger = vi.fn(() => ({
   error: vi.fn(),
 }));
 
-vi.mock('electron', () => ({
+vi.mock("electron", () => ({
   systemPreferences: {
     askForMediaAccess,
   },
@@ -24,26 +24,26 @@ vi.mock('electron', () => ({
   },
 }));
 
-vi.mock('../sentry', () => ({
+vi.mock("../sentry", () => ({
   captureException,
 }));
 
-vi.mock('../shared/logger', () => ({
+vi.mock("../shared/logger", () => ({
   getLogger,
 }));
 
-let requestCameraPermission: typeof import('../cameraPermissions.js').requestCameraPermission;
-let openCameraSettings: typeof import('../cameraPermissions.js').openCameraSettings;
+let requestCameraPermission: typeof import("../cameraPermissions.js").requestCameraPermission;
+let openCameraSettings: typeof import("../cameraPermissions.js").openCameraSettings;
 
 const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(
   process,
-  'platform',
+  "platform",
 );
 
 type PlatformName = typeof process.platform;
 
 const setPlatform = (platform: PlatformName) => {
-  Object.defineProperty(process, 'platform', {
+  Object.defineProperty(process, "platform", {
     value: platform,
     configurable: true,
   });
@@ -51,7 +51,7 @@ const setPlatform = (platform: PlatformName) => {
 
 beforeEach(async () => {
   vi.resetModules();
-  const module = await import('../cameraPermissions.js');
+  const module = await import("../cameraPermissions.js");
   requestCameraPermission = module.requestCameraPermission;
   openCameraSettings = module.openCameraSettings;
 });
@@ -68,23 +68,23 @@ afterEach(() => {
 
 afterAll(() => {
   if (originalPlatformDescriptor) {
-    Object.defineProperty(process, 'platform', originalPlatformDescriptor);
+    Object.defineProperty(process, "platform", originalPlatformDescriptor);
   }
 });
 
-describe('cameraPermissions', () => {
-  it('requests camera permissions via system preferences on macOS', async () => {
-    setPlatform('darwin');
+describe("cameraPermissions", () => {
+  it("requests camera permissions via system preferences on macOS", async () => {
+    setPlatform("darwin");
     askForMediaAccess.mockResolvedValueOnce(true);
 
     const result = await requestCameraPermission();
 
-    expect(askForMediaAccess).toHaveBeenCalledWith('camera');
+    expect(askForMediaAccess).toHaveBeenCalledWith("camera");
     expect(result).toEqual({ granted: true });
   });
 
-  it('skips system preferences on non-mac platforms', async () => {
-    setPlatform('win32');
+  it("skips system preferences on non-mac platforms", async () => {
+    setPlatform("win32");
 
     const result = await requestCameraPermission();
 
@@ -92,61 +92,61 @@ describe('cameraPermissions', () => {
     expect(result).toEqual({ granted: true });
   });
 
-  it('returns error when camera access request fails', async () => {
-    const error = new Error('unavailable');
-    setPlatform('darwin');
+  it("returns error when camera access request fails", async () => {
+    const error = new Error("unavailable");
+    setPlatform("darwin");
     askForMediaAccess.mockRejectedValueOnce(error);
 
     const result = await requestCameraPermission();
 
     expect(result.granted).toBe(false);
-    expect(result.error).toBe('unavailable');
+    expect(result.error).toBe("unavailable");
     expect(captureException).toHaveBeenCalledWith(error, {
-      scope: 'camera:request',
+      scope: "camera:request",
     });
   });
 
-  it('opens system settings on supported platforms', async () => {
-    setPlatform('win32');
+  it("opens system settings on supported platforms", async () => {
+    setPlatform("win32");
     openExternal.mockResolvedValueOnce(undefined);
 
     const result = await openCameraSettings();
 
-    expect(openExternal).toHaveBeenCalledWith('ms-settings:privacy-webcam');
+    expect(openExternal).toHaveBeenCalledWith("ms-settings:privacy-webcam");
     expect(result).toEqual({ success: true });
   });
 
-  it('opens gnome-control-center on Linux', async () => {
-    setPlatform('linux');
+  it("opens gnome-control-center on Linux", async () => {
+    setPlatform("linux");
     openExternal.mockResolvedValueOnce(undefined);
 
     const result = await openCameraSettings();
 
-    expect(openExternal).toHaveBeenCalledWith('gnome-control-center://camera');
+    expect(openExternal).toHaveBeenCalledWith("gnome-control-center://camera");
     expect(result).toEqual({ success: true });
   });
 
-  it('returns an error for unsupported platforms', async () => {
-    setPlatform('freebsd' as PlatformName);
+  it("returns an error for unsupported platforms", async () => {
+    setPlatform("freebsd" as PlatformName);
 
     const result = await openCameraSettings();
 
     expect(openExternal).not.toHaveBeenCalled();
     expect(result.success).toBe(false);
-    expect(result.error).toContain('freebsd');
+    expect(result.error).toContain("freebsd");
   });
 
-  it('captures exceptions when opening settings fails', async () => {
-    const error = new Error('failed to open');
-    setPlatform('darwin');
+  it("captures exceptions when opening settings fails", async () => {
+    const error = new Error("failed to open");
+    setPlatform("darwin");
     openExternal.mockRejectedValueOnce(error);
 
     const result = await openCameraSettings();
 
     expect(result.success).toBe(false);
-    expect(result.error).toBe('failed to open');
+    expect(result.error).toBe("failed to open");
     expect(captureException).toHaveBeenCalledWith(error, {
-      scope: 'camera:open-settings',
+      scope: "camera:open-settings",
     });
   });
 });
