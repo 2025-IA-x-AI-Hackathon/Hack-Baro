@@ -16,7 +16,7 @@ import './styles/globals.css';
 import { IPC_CHANNELS } from '../shared/ipcChannels';
 import { getLogger } from '../shared/logger';
 import { ExampleHeroUI } from './components/ExampleHeroUI';
-import { OnboardingWizard } from './components/onboarding/O';
+import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 
 type ElectronApi = Window['electron'];
