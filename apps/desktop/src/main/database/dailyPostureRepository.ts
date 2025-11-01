@@ -156,13 +156,26 @@ export const calculateStreak = (): number => {
       .all();
 
     let streak = 0;
+    let prevDate: Date | null = null;
     
-    // Count consecutive days from today backwards
+    // Count consecutive days from today backwards, ensuring no missing days
     for (const log of allLogs) {
+      const logDate = new Date(log.date);
+      
+      if (prevDate !== null) {
+        // Check if logDate is exactly one day before prevDate
+        const diffTime = prevDate.getTime() - logDate.getTime();
+        const diffDays = diffTime / (1000 * 60 * 60 * 24);
+        if (diffDays !== 1) {
+          break; // Gap in days, streak broken
+        }
+      }
+      
       if (log.avgScore >= STREAK_THRESHOLD) {
         streak++;
+        prevDate = logDate;
       } else {
-        break; // Streak broken
+        break; // Streak broken due to low score
       }
     }
 
