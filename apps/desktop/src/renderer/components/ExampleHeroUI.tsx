@@ -5,7 +5,7 @@ import type { EngineTick } from "../../shared/types/engine-output";
 type ExampleHeroUIProps = {
   onPingMain: () => void;
   onPingWorker: () => void;
-  engineTick: EngineTick | null;
+  engineTick?: EngineTick | null;
 };
 
 export default function ExampleHeroUI({
