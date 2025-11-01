@@ -8,4 +8,4 @@ export {
   isSupportedLanguage,
   resolveInitialLanguage,
   setLanguage,
-} from './config';
+} from "./config";
