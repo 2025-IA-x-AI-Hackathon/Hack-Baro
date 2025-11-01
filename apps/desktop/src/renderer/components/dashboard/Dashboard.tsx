@@ -1,5 +1,5 @@
 import { Card, CardBody, CardHeader } from "@heroui/react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 export const Dashboard = () => {
   // Placeholder data for initial implementation
