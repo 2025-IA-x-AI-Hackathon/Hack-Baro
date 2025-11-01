@@ -26,7 +26,14 @@
     "build": {
       "dependsOn": ["^build", "i18n:generate-types"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": ["dist/**", "build/**", ".next/**", "!.next/cache/**"]
+      "outputs": [
+        "dist/**",
+        "build/**",
+        ".next/**",
+        "!.next/cache/**",
+        "release/app/dist/**",
+        "release/build/**"
+      ]
     },
     "i18n:generate-types": {
       "cache": true,
