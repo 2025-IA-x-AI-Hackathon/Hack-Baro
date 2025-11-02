@@ -33,6 +33,7 @@ export const useDetectionPipeline = ({
   const [error, setError] = useState<string | null>(null);
   const [debug, setDebug] = useState<DetectionDebugState | null>(null);
   const [landmarks, setLandmarks] = useState<CombinedLandmarks | null>(null);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [performanceConfig, setPerformanceConfig] = useState<PerformanceConfig>(
     DEFAULT_PERFORMANCE_CONFIG,
   );
@@ -57,6 +58,7 @@ export const useDetectionPipeline = ({
       setMetrics(null);
       setDebug(null);
       setLandmarks(null);
+      setCameraStream(null);
       pipeline.setCameraPreviewVisible(false);
       return () => {
         pipeline.stop();
@@ -79,6 +81,7 @@ export const useDetectionPipeline = ({
         setPerformanceConfig(pipeline.getPerformanceConfig());
         setPerformanceModeState(pipeline.getPerformanceMode());
         setLandmarks(pipeline.getLatestLandmarks());
+        setCameraStream(pipeline.getCameraStream());
         setStatus("running");
         return undefined;
       })
@@ -90,6 +93,7 @@ export const useDetectionPipeline = ({
         if (isMounted) {
           setError(message);
           setStatus("error");
+          setCameraStream(null);
         }
         pipeline.stop();
         return undefined;
@@ -99,6 +103,10 @@ export const useDetectionPipeline = ({
       if (isMounted) {
         setMetrics(pipeline.getMetrics());
         setDebug(pipeline.getDebugState());
+        setCameraStream((current) => {
+          const next = pipeline.getCameraStream();
+          return current === next ? current : next;
+        });
       }
     }, 1000);
 
@@ -106,6 +114,7 @@ export const useDetectionPipeline = ({
       isMounted = false;
       window.clearInterval(updateInterval);
       pipeline.stop();
+      setCameraStream(null);
     };
   }, [enabled, detector, pipeline]);
 
@@ -174,6 +183,7 @@ export const useDetectionPipeline = ({
         setMetrics(pipeline.getMetrics());
         setDebug(pipeline.getDebugState());
         setLandmarks(pipeline.getLatestLandmarks());
+        setCameraStream(pipeline.getCameraStream());
         setError(null);
         if (pipeline.isRunning()) {
           setStatus("running");
@@ -212,6 +222,7 @@ export const useDetectionPipeline = ({
         setMetrics(pipeline.getMetrics());
         setDebug(pipeline.getDebugState());
         setLandmarks(pipeline.getLatestLandmarks());
+        setCameraStream(pipeline.getCameraStream());
         setError(null);
         if (pipeline.isRunning()) {
           setStatus("running");
@@ -245,6 +256,7 @@ export const useDetectionPipeline = ({
     performanceMode,
     setPerformanceMode: changePerformanceMode,
     isSwitchingMode,
+    cameraStream,
   } as const;
 };
 
