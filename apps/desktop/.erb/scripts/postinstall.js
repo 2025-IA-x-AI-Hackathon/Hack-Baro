@@ -22,20 +22,22 @@ try {
 let shouldSkipInstallAppDeps =
   process.env.CI === "true" || process.env.BARO_SKIP_ELECTRON_BUILDER === "1";
 
-const repoRoot = path.resolve(__dirname, "../../../../");
-const uiPackageDir = path.join(repoRoot, "packages", "ui");
-const uiPackageJson = path.join(uiPackageDir, "package.json");
-const uiPnpmLock = path.join(uiPackageDir, "pnpm-lock.yaml");
-const uiYarnLock = path.join(uiPackageDir, "yarn.lock");
-const uiNpmLock = path.join(uiPackageDir, "package-lock.json");
+// const repoRoot = path.resolve(__dirname, "../../../../");
+// const uiPackageDir = path.join(repoRoot, "packages", "ui");
+// const uiPackageJson = path.join(uiPackageDir, "package.json");
+// const uiPnpmLock = path.join(uiPackageDir, "pnpm-lock.yaml");
+// const uiYarnLock = path.join(uiPackageDir, "yarn.lock");
+// const uiNpmLock = path.join(uiPackageDir, "package-lock.json");
 
-const hasPackageJson = fs.existsSync(uiPackageJson);
-const hasLockFile =
-  fs.existsSync(uiPnpmLock) ||
-  fs.existsSync(uiYarnLock) ||
-  fs.existsSync(uiNpmLock);
+// const hasPackageJson = fs.existsSync(uiPackageJson);
+// const hasLockFile =
+//   fs.existsSync(uiPnpmLock) ||
+//   fs.existsSync(uiYarnLock) ||
+//   fs.existsSync(uiNpmLock);
 
-if (!shouldSkipInstallAppDeps && (!hasPackageJson || !hasLockFile)) {
+if (!shouldSkipInstallAppDeps
+  //  && (!hasPackageJson || !hasLockFile)
+  ) {
   console.warn(
     "Skipping electron-builder install-app-deps because packages/ui is not yet bootstrapped. " +
       'Run "pnpm install --filter @baro/ui" or set BARO_SKIP_ELECTRON_BUILDER=1 if you need to install native deps.',
