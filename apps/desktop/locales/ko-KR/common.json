@@ -52,5 +52,105 @@
       "privacySecurityCamera": "개인정보 보호 및 보안 → 카메라로 이동",
       "togglePosely": "포슬리 항목을 허용"
     }
+  },
+  "onboarding": {
+    "wizard": {
+      "stepLabel": "{{total}}단계 중 {{current}}단계",
+      "titles": {
+        "setup": "자세 코치를 설정해요",
+        "electronUnavailable": "Electron을 사용할 수 없습니다"
+      },
+      "messages": {
+        "permissionUnavailable": "Electron API를 불러오지 못해 카메라 권한을 사용할 수 없습니다.",
+        "permissionDenied": "카메라 접근이 거부되었습니다. 계속하려면 시스템 설정에서 허용해 주세요.",
+        "permissionError": "카메라 접근을 요청하는 중 예상치 못한 오류가 발생했습니다. 다시 시도해 주세요.",
+        "settingsUnavailable": "Electron API를 사용할 수 없어 시스템 설정을 열 수 없습니다.",
+        "settingsOpenError": "시스템 설정을 자동으로 열지 못했습니다. 수동으로 열어 권한을 허용해 주세요.",
+        "calibrationLoadError": "이전에 저장된 보정 데이터를 불러오지 못했습니다. 다시 보정을 진행해 주세요.",
+        "electronMissing": "Electron 프리로드 브리지가 없어 포슬리가 카메라 권한이나 보정 데이터를 불러올 수 없습니다. 앱을 다시 시작해 주세요."
+      },
+      "states": {
+        "welcome": {
+          "body": "포슬리에 오신 것을 환영합니다. 포슬리는 기기에 저장된 웹캠 화면만 사용하여 자세를 분석하며, 영상은 업로드되거나 저장되지 않습니다. 시작하려면 카메라 접근 권한이 필요합니다.",
+          "cta": "다음"
+        },
+        "requesting": {
+          "body": "카메라 접근을 요청하는 중입니다. 시스템 알림을 승인해 주세요.",
+          "aria": "카메라 권한 요청 중"
+        },
+        "denied": {
+          "body": "실시간 자세 모니터링을 위해 카메라 접근이 필요합니다. 시스템 설정에서 카메라를 허용한 뒤 이 화면으로 돌아와 주세요."
+        },
+        "error": {
+          "body": "카메라 권한을 요청하는 중 문제가 발생했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.",
+          "cta": "다시 시도"
+        }
+      },
+      "loading": {
+        "checkingLabel": "보정 확인 중",
+        "checkingMessage": "이전 보정 데이터를 확인하는 중…"
+      }
+    },
+    "calibration": {
+      "alerts": {
+        "frequentUnreliable": "감지 결과가 자주 신뢰할 수 없는 자세로 표시됩니다 ({{ratioText}}). 보정을 다시 진행하거나 민감도를 조정해 주세요.",
+        "ratio": {
+          "recentFrames": "최근 프레임",
+          "percentage": "{{percentage}}%의 프레임"
+        }
+      },
+      "banner": {
+        "title": "보정이 필요합니다",
+        "cta": "지금 다시 보정",
+        "dismiss": "알겠어요"
+      },
+      "panel": {
+        "title": "보정 및 민감도",
+        "description": "개인화된 임계값으로 자세 알림을 더 정확하게 유지하세요. 환경이 바뀌면 언제든 다시 보정할 수 있습니다.",
+        "lastCalibrated": "마지막 보정:",
+        "qualityScore": "품질 점수:",
+        "sampleCount": "수집 프레임:",
+        "activeSensitivity": "현재 민감도:",
+        "thresholdOverview": "임계값 요약",
+        "pitchThreshold": "목각도 임계값:",
+        "ehdThreshold": "EHD 임계값:",
+        "dprThreshold": "DPR 임계값:",
+        "sensitivityPresets": "민감도 프리셋",
+        "pitchInputLabel": "목각도 임계값 (°)",
+        "ehdInputLabel": "EHD 임계값",
+        "dprInputLabel": "DPR 임계값",
+        "pitchRange": "범위 {{min}}°-{{max}}°",
+        "ehdRange": "범위 {{min}}-{{max}}",
+        "dprRange": "범위 {{min}}-{{max}}",
+        "customHelper": "자세 편차 임계값을 조정해 세밀하게 튜닝하세요.",
+        "applyCustom": "사용자 임계값 적용",
+        "applying": "적용 중…",
+        "reset": "추천값으로 초기화",
+        "emptyState": "저장된 보정 데이터가 없습니다.",
+        "updating": "민감도를 업데이트하는 중…",
+        "refreshing": "보정 상태를 새로고침하는 중…",
+        "primaryCta": {
+          "recalibrate": "다시 보정",
+          "start": "보정 시작"
+        },
+        "close": "패널 닫기",
+        "rerunHeading": "보정 다시 실행",
+        "cancel": "취소"
+      },
+      "errors": {
+        "load": "보정 데이터를 불러올 수 없습니다. 정확한 알림을 위해 보정을 다시 진행해 주세요.",
+        "update": "민감도를 업데이트하지 못했습니다. 다시 시도해 주세요.",
+        "numeric": "모든 임계값에 숫자를 입력해 주세요.",
+        "pitchRange": "목각도는 {{min}}° 이상 {{max}}° 이하이어야 합니다.",
+        "ehdRange": "EHD는 {{min}} 이상 {{max}} 이하이어야 합니다.",
+        "dprRange": "DPR은 {{min}} 이상 {{max}} 이하이어야 합니다."
+      },
+      "sensitivity": {
+        "low": "낮음",
+        "medium": "보통",
+        "high": "높음",
+        "custom": "사용자 설정"
+      }
+    }
   }
 }

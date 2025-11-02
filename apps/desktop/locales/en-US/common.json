@@ -52,5 +52,120 @@
       "privacySecurityCamera": "Navigate to Privacy & Security → Camera",
       "togglePosely": "Enable Posely"
     }
+  },
+  "notifications": {
+    "titles": {
+      "red": "Posture Alert",
+      "yellow": "Posture Reminder"
+    },
+    "body": {
+      "red": "You have stayed in the red zone for {{duration}}. Adjust your posture to reduce strain.",
+      "yellowFromGreen": "Your posture moved from green to yellow and has stayed there for {{duration}}. Take a moment to reset.",
+      "yellow": "You have been in the yellow zone for {{duration}}. Straighten up to return to green."
+    },
+    "duration": {
+      "single": "{{minutes}} minute",
+      "plural": "{{minutes}} minutes"
+    }
+  },
+  "onboarding": {
+    "wizard": {
+      "stepLabel": "Step {{current}} of {{total}}",
+      "titles": {
+        "setup": "Let's set up your posture coach",
+        "electronUnavailable": "Electron unavailable"
+      },
+      "messages": {
+        "permissionUnavailable": "Camera permissions are unavailable because the Electron APIs could not be loaded.",
+        "permissionDenied": "Camera access was denied. You can enable it via system settings to continue.",
+        "permissionError": "We hit an unexpected error while requesting camera access. Please try again.",
+        "settingsUnavailable": "System settings cannot be opened because Electron APIs are unavailable.",
+        "settingsOpenError": "Unable to open system settings automatically. Please open them manually to grant access.",
+        "calibrationLoadError": "We couldn’t load your previous calibration. Please run calibration again.",
+        "electronMissing": "Posely can’t access camera permissions or calibration because the Electron preload bridge is missing. Restart the app to continue."
+      },
+      "states": {
+        "welcome": {
+          "body": "Welcome to Posely. We use your webcam to monitor posture locally on your device—no footage is ever uploaded or stored. To get started, we need permission to access your camera.",
+          "cta": "Next"
+        },
+        "requesting": {
+          "body": "Requesting camera access. Approve the system prompt to continue.",
+          "aria": "Requesting camera permission"
+        },
+        "denied": {
+          "body": "We need camera access to monitor your posture in real time. You can enable the camera in your system settings, then return here to continue onboarding."
+        },
+        "error": {
+          "body": "Something went wrong while requesting camera access. Check your connection and try again.",
+          "cta": "Try Again"
+        }
+      },
+      "loading": {
+        "checkingLabel": "Checking calibration",
+        "checkingMessage": "Checking previous calibration…"
+      }
+    },
+    "calibration": {
+      "alerts": {
+        "frequentUnreliable": "Detection frequently reports unreliable posture ({{ratioText}}). Consider recalibrating or adjusting sensitivity.",
+        "ratio": {
+          "recentFrames": "recent frames",
+          "percentage": "{{percentage}}% of frames"
+        }
+      },
+      "banner": {
+        "title": "Calibration Recommended",
+        "cta": "Re-calibrate now",
+        "dismiss": "Got it"
+      },
+      "panel": {
+        "title": "Calibration & Sensitivity",
+        "description": "Personalised thresholds keep posture nudges relevant. Re-run calibration anytime your setup changes.",
+        "lastCalibrated": "Last calibrated:",
+        "qualityScore": "Quality score:",
+        "sampleCount": "Sample count:",
+        "activeSensitivity": "Active sensitivity:",
+        "thresholdOverview": "Threshold overview",
+        "pitchThreshold": "Pitch threshold:",
+        "ehdThreshold": "EHD threshold:",
+        "dprThreshold": "DPR threshold:",
+        "sensitivityPresets": "Sensitivity presets",
+        "pitchInputLabel": "Pitch threshold (°)",
+        "ehdInputLabel": "EHD threshold",
+        "dprInputLabel": "DPR threshold",
+        "pitchRange": "Range {{min}}°-{{max}}°",
+        "ehdRange": "Range {{min}}-{{max}}",
+        "dprRange": "Range {{min}}-{{max}}",
+        "customHelper": "Adjust posture deviation thresholds for advanced tuning.",
+        "applyCustom": "Apply custom thresholds",
+        "applying": "Applying…",
+        "reset": "Reset to recommended",
+        "emptyState": "No calibration stored yet.",
+        "updating": "Updating sensitivity…",
+        "refreshing": "Refreshing calibration status…",
+        "primaryCta": {
+          "recalibrate": "Re-calibrate",
+          "start": "Start calibration"
+        },
+        "close": "Close panel",
+        "rerunHeading": "Re-run calibration",
+        "cancel": "Cancel"
+      },
+      "errors": {
+        "load": "Calibration data unavailable. Run calibration to personalise alerts.",
+        "update": "Failed to update sensitivity. Please try again.",
+        "numeric": "Enter numeric values for all thresholds.",
+        "pitchRange": "Pitch must be between {{min}}° and {{max}}°.",
+        "ehdRange": "EHD must be between {{min}} and {{max}}.",
+        "dprRange": "DPR must be between {{min}} and {{max}}."
+      },
+      "sensitivity": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "custom": "Custom"
+      }
+    }
   }
 }
