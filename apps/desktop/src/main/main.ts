@@ -882,7 +882,18 @@ const initializeAppUpdater = (): void => {
 const dispatchWorkerMessage = (message: WorkerMessage) => {
   if (!mainWindow) {
     if (message.type === WORKER_MESSAGES.engineTick) {
-      latestEngineTick = (message.payload ?? null) as EngineTick | null;
+      const enginePayload = (message.payload ?? null) as
+        | EngineTickPayload
+        | null;
+      const tick = enginePayload?.tick ?? null;
+      if (tick) {
+        broadcastEngineTick(tick);
+        const reliability = tick.reliability ?? null;
+        if (reliability) {
+          recordReliabilitySample(reliability === "UNRELIABLE");
+          maybeEmitCalibrationNudge();
+        }
+      }
       return;
     }
 
@@ -907,20 +918,29 @@ const dispatchWorkerMessage = (message: WorkerMessage) => {
         message.payload ?? null,
       );
       break;
-    case WORKER_MESSAGES.engineTick:
-      mainWindow.webContents.send(
-        IPC_CHANNELS.engineTick,
-        message.payload ?? null,
-      );
-      {
-        const enginePayload = message.payload as EngineTickPayload | null;
-        const reliability = enginePayload?.tick?.reliability ?? null;
+    case WORKER_MESSAGES.engineTick: {
+      const enginePayload = message.payload as EngineTickPayload | null;
+      const tick = enginePayload?.tick ?? null;
+
+      if (tick) {
+        broadcastEngineTick(tick);
+        const reliability = tick.reliability ?? null;
         if (reliability) {
           recordReliabilitySample(reliability === "UNRELIABLE");
           maybeEmitCalibrationNudge();
         }
+      } else {
+        logger.warn("Received engine tick payload without tick", {
+          payload: enginePayload,
+        });
       }
+
+      mainWindow.webContents.send(
+        IPC_CHANNELS.engineTick,
+        message.payload ?? null,
+      );
       break;
+    }
     case WORKER_MESSAGES.engineError:
       logger.warn("Worker reported engine error", {
         payload: message.payload ?? null,
