@@ -1,126 +1,108 @@
 import { useState } from "react";
 
-export type WeeklyDataPoint = {
+type WeeklySummary = {
   date: string;
-  score: number;
+  avgScore: number;
+  sampleCount: number;
 };
 
 type WeeklyChartProps = {
-  data: WeeklyDataPoint[];
+  data: WeeklySummary[];
 };
 
-export const WeeklyChart = ({ data }: WeeklyChartProps) => {
+/**
+ * WeeklyChart Component
+ *
+ * Displays a bar chart showing daily average posture scores for the past 7 days.
+ * Features:
+ * - Simple div-based bars (no heavy chart library)
+ * - Animated entry (bars grow from baseline)
+ * - Hover tooltips showing date and score
+ * - Color-coded bars based on score thresholds (green >= 80, yellow >= 60, red < 60)
+ */
+function WeeklyChart({ data }: WeeklyChartProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  // Ensure we always display 7 days (fill missing days with 0 score)
-  const fillDataForSevenDays = (): WeeklyDataPoint[] => {
-    const today = new Date();
-    const result: WeeklyDataPoint[] = [];
-
-    // Ensure data is an array
-    const dataArray = Array.isArray(data) ? data : [];
-
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(today.getDate() - i);
-      const dateStr = date.toISOString().split("T")[0];
-
-      const existingData = dataArray.find((d) => d.date === dateStr);
-      result.push({
-        date: dateStr!,
-        score: existingData?.score ?? 0,
-      });
-    }
-
-    return result;
+  // Format date to short day name (Mon, Tue, etc.)
+  const formatDayLabel = (dateString: string): string => {
+    const date = new Date(dateString);
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    return days[date.getDay()] || "???";
   };
 
-  const weeklyData = fillDataForSevenDays();
-
-  // Get day of week labels
-  const getDayLabel = (dateStr: string): string => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("en-US", { weekday: "short" });
+  // Get bar color based on score thresholds
+  const getBarColor = (score: number): string => {
+    if (score >= 80) return "bg-green-500";
+    if (score >= 60) return "bg-yellow-500";
+    return "bg-red-500";
   };
 
-  // Format date for tooltip
-  const formatTooltipDate = (dateStr: string): string => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("en-US", {
+  // Format tooltip text
+  const getTooltipText = (item: WeeklySummary): string => {
+    const date = new Date(item.date);
+    const formattedDate = date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
     });
+    const score = Math.round(item.avgScore);
+    return `${formattedDate}: ${score}%`;
   };
 
+  // Handle case where there's no data
+  if (data.length === 0) {
+    return (
+      <div className="flex h-[120px] items-center justify-center px-4">
+        <p className="text-sm text-slate-400">No data available yet</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-48 items-end justify-around gap-2 px-4">
-      {weeklyData.map((dataPoint, index) => {
-        const barHeight = (dataPoint.score / 100) * 160;
-        const hasData = dataPoint.score > 0;
+    <div className="relative px-4" style={{ height: "120px" }}>
+      <div className="flex h-full items-end justify-around gap-2">
+        {data.map((item, index) => {
+          const score = Math.round(item.avgScore);
+          // Only show bars for days with data (sampleCount > 0)
+          const heightPercent = item.sampleCount > 0 ? score : 0;
 
-        return (
-          <div
-            key={dataPoint.date}
-            className="relative flex flex-1 flex-col items-center"
-          >
-            {/* Tooltip */}
-            {hoveredIndex === index && (
-              <div className="absolute bottom-full mb-2 whitespace-nowrap rounded-md bg-slate-800 px-3 py-1.5 text-xs text-white shadow-lg">
-                <div className="font-semibold">
-                  {formatTooltipDate(dataPoint.date)}
+          return (
+            <div
+              key={item.date}
+              className="relative flex flex-1 flex-col items-center gap-2"
+              onMouseEnter={() => setHoveredIndex(index)}
+              onMouseLeave={() => setHoveredIndex(null)}
+            >
+              {/* Tooltip */}
+              {hoveredIndex === index && item.sampleCount > 0 && (
+                <div className="absolute -top-8 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded bg-slate-800 px-2 py-1 text-xs text-white shadow-lg">
+                  {getTooltipText(item)}
                 </div>
-                <div className="text-slate-300">
-                  {hasData
-                    ? `${Math.round(dataPoint.score)}% quality`
-                    : "No data"}
-                </div>
-                {/* Arrow pointer */}
-                <div className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
-              </div>
-            )}
+              )}
 
-            {/* Bar */}
-            <div className="relative w-full">
+              {/* Bar */}
               <div
-                className={`
-                  w-full rounded-t-md transition-all duration-500
-                  ${hasData ? "bg-blue-500 hover:bg-blue-600" : "bg-slate-200"}
-                `}
+                className={`weekly-chart-bar w-full rounded-t transition-all duration-300 hover:opacity-80 ${
+                  item.sampleCount > 0
+                    ? getBarColor(item.avgScore)
+                    : "bg-slate-200"
+                }`}
                 style={{
-                  height: `${barHeight}px`,
-                  transform: `scaleY(1)`,
-                  transformOrigin: "bottom",
-                  // Staggered animation
-                  animation: `growBar 500ms ease-out ${index * 50}ms backwards`,
+                  height: `${heightPercent}%`,
+                  animationDelay: `${index * 50}ms`,
                 }}
-                onMouseEnter={() => setHoveredIndex(index)}
-                onMouseLeave={() => setHoveredIndex(null)}
-                title={
-                  hasData
-                    ? `${formatTooltipDate(dataPoint.date)}: ${Math.round(dataPoint.score)}%`
-                    : `${formatTooltipDate(dataPoint.date)}: No data`
-                }
+                title={item.sampleCount > 0 ? getTooltipText(item) : "No data"}
               />
-            </div>
 
-            {/* Day label */}
-            <div className="mt-2 text-xs text-slate-500">
-              {getDayLabel(dataPoint.date)}
+              {/* Day label */}
+              <span className="text-xs text-slate-500">
+                {formatDayLabel(item.date)}
+              </span>
             </div>
-          </div>
-        );
-      })}
-
-      <style>{`
-        @keyframes growBar {
-          from {
-            transform: scaleY(0);
-          }
-          to {
-            transform: scaleY(1);
-          }
-        }
-      `}</style>
+          );
+        })}
+      </div>
     </div>
   );
-};
+}
+
+export default WeeklyChart;
