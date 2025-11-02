@@ -4,7 +4,11 @@ import { getLogger } from "../../shared/logger";
 import type { EngineTick } from "../../shared/types/engine-output";
 import type { ScoreZone } from "../../shared/types/score";
 
-type NotificationType = "red" | "yellowFromGreen" | "yellowDwell";
+type NotificationType =
+  | "red"
+  | "yellowFromGreen"
+  | "yellowDwell"
+  | "greenBreak";
 
 type NotificationScheduleState = {
   start: number | null;
@@ -23,11 +27,13 @@ const MINUTE_IN_MS = 60_000;
 const RED_ZONE_SCHEDULE_MINUTES = [1, 3, 5, 7, 9, 11] as const;
 const YELLOW_FROM_GREEN_SCHEDULE_MINUTES = [3, 5, 7, 9, 11] as const;
 const YELLOW_DWELL_SCHEDULE_MINUTES = [5, 7, 9, 11] as const;
+const GREEN_BREAK_SCHEDULE_MINUTES = [45] as const;
 
 const createInitialSchedules = (): NotificationSchedules => ({
   red: { start: null, nextIndex: 0 },
   yellowFromGreen: { start: null, nextIndex: 0 },
   yellowDwell: { start: null, nextIndex: 0 },
+  greenBreak: { start: null, nextIndex: 0 },
 });
 
 const isNotificationSupported = (): boolean =>
@@ -91,6 +97,7 @@ export const useZoneNotifications = (engineTick: EngineTick | null): void => {
         red: t("notifications.titles.red"),
         yellowFromGreen: t("notifications.titles.yellow"),
         yellowDwell: t("notifications.titles.yellow"),
+        greenBreak: t("notifications.titles.break"),
       };
 
       const bodies: Record<NotificationType, string> = {
@@ -101,6 +108,9 @@ export const useZoneNotifications = (engineTick: EngineTick | null): void => {
           duration: formatDuration(minutes),
         }),
         yellowDwell: t("notifications.body.yellow", {
+          duration: formatDuration(minutes),
+        }),
+        greenBreak: t("notifications.body.break", {
           duration: formatDuration(minutes),
         }),
       };
@@ -171,11 +181,18 @@ export const useZoneNotifications = (engineTick: EngineTick | null): void => {
         } else {
           schedules.yellowFromGreen = { start: null, nextIndex: 0 };
         }
+        schedules.greenBreak = { start: null, nextIndex: 0 };
       } else if (previousZone === "YELLOW") {
         schedules.yellowDwell = { start: null, nextIndex: 0 };
         schedules.yellowFromGreen = { start: null, nextIndex: 0 };
       } else {
         schedules.yellowFromGreen = { start: null, nextIndex: 0 };
+      }
+
+      if (zone === "GREEN") {
+        schedules.greenBreak = { start: timestamp, nextIndex: 0 };
+      } else if (previousZone === "GREEN") {
+        schedules.greenBreak = { start: null, nextIndex: 0 };
       }
     }
 
@@ -246,6 +263,13 @@ export const useZoneNotifications = (engineTick: EngineTick | null): void => {
         schedules.yellowDwell.start,
         schedules.yellowDwell.nextIndex,
         YELLOW_DWELL_SCHEDULE_MINUTES,
+      );
+    } else if (zone === "GREEN") {
+      schedules.greenBreak.nextIndex = maybeTrigger(
+        "greenBreak",
+        schedules.greenBreak.start,
+        schedules.greenBreak.nextIndex,
+        GREEN_BREAK_SCHEDULE_MINUTES,
       );
     }
   }, [engineTick, notify]);
