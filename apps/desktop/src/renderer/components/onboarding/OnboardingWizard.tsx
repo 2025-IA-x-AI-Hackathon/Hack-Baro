@@ -8,6 +8,7 @@ import {
   Spacer,
 } from "@heroui/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ElectronHandler } from "../../../main/preload";
 import { IPC_CHANNELS } from "../../../shared/ipcChannels";
 import type { RendererChannel } from "../../../shared/ipcChannels";
@@ -55,6 +56,7 @@ export function OnboardingWizard({
   electron = null,
   onComplete,
 }: OnboardingWizardProps) {
+  const { t } = useTranslation(["common"]);
   const [permissionState, setPermissionState] =
     useState<PermissionState>("welcome");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -96,7 +98,7 @@ export function OnboardingWizard({
           error: error instanceof Error ? error.message : String(error),
         });
         setCalibrationLoadError(
-          "We couldn’t load your previous calibration. Please run calibration again.",
+          t("onboarding.wizard.messages.calibrationLoadError"),
         );
       } finally {
         if (!cancelled) {
@@ -113,7 +115,7 @@ export function OnboardingWizard({
         error: error instanceof Error ? error.message : String(error),
       });
       setCalibrationLoadError(
-        "We couldn’t load your previous calibration. Please run calibration again.",
+        t("onboarding.wizard.messages.calibrationLoadError"),
       );
       setIsCalibrationLoading(false);
     });
@@ -121,7 +123,7 @@ export function OnboardingWizard({
     return () => {
       cancelled = true;
     };
-  }, [calibration, electronApi]);
+  }, [calibration, electronApi, t]);
 
   useEffect(() => {
     if (calibration) {
@@ -132,9 +134,7 @@ export function OnboardingWizard({
   const requestPermission = useCallback(() => {
     if (!electronApi) {
       setPermissionState("error");
-      setErrorMessage(
-        "Camera permissions are unavailable because the Electron APIs could not be loaded.",
-      );
+      setErrorMessage(t("onboarding.wizard.messages.permissionUnavailable"));
       return;
     }
 
@@ -159,18 +159,14 @@ export function OnboardingWizard({
         if (response?.error) {
           setErrorMessage(response.error);
         } else {
-          setErrorMessage(
-            "Camera access was denied. You can enable it via system settings to continue.",
-          );
+          setErrorMessage(t("onboarding.wizard.messages.permissionDenied"));
         }
       } catch (error: unknown) {
         logger.error("Failed to request camera permission", {
           error: error instanceof Error ? error.message : String(error),
         });
         setPermissionState("error");
-        setErrorMessage(
-          "We hit an unexpected error while requesting camera access. Please try again.",
-        );
+        setErrorMessage(t("onboarding.wizard.messages.permissionError"));
       }
     };
 
@@ -179,17 +175,13 @@ export function OnboardingWizard({
         error: error instanceof Error ? error.message : String(error),
       });
       setPermissionState("error");
-      setErrorMessage(
-        "We hit an unexpected error while requesting camera access. Please try again.",
-      );
+      setErrorMessage(t("onboarding.wizard.messages.permissionError"));
     });
-  }, [electronApi]);
+  }, [electronApi, t]);
 
   const openSystemSettings = useCallback(() => {
     if (!electronApi) {
-      setErrorMessage(
-        "System settings cannot be opened because Electron APIs are unavailable.",
-      );
+      setErrorMessage(t("onboarding.wizard.messages.settingsUnavailable"));
       return;
     }
 
@@ -214,7 +206,7 @@ export function OnboardingWizard({
           error: error instanceof Error ? error.message : String(error),
         });
         setErrorMessage(
-          "Unable to open system settings automatically. Please open them manually to grant access.",
+          t("onboarding.wizard.messages.settingsOpenError"),
         );
       } finally {
         setIsOpeningSettings(false);
@@ -226,11 +218,9 @@ export function OnboardingWizard({
         error: error instanceof Error ? error.message : String(error),
       });
       setIsOpeningSettings(false);
-      setErrorMessage(
-        "Unable to open system settings automatically. Please open them manually to grant access.",
-      );
+      setErrorMessage(t("onboarding.wizard.messages.settingsOpenError"));
     });
-  }, [electronApi]);
+  }, [electronApi, t]);
 
   const renderCardBody = () => {
     switch (permissionState) {
@@ -238,9 +228,7 @@ export function OnboardingWizard({
         return (
           <>
             <p className="text-base text-white/80">
-              Welcome to Posely. We use your webcam to monitor posture locally
-              on your device—no footage is ever uploaded or stored. To get
-              started, we need permission to access your camera.
+              {t("onboarding.wizard.states.welcome.body")}
             </p>
             <Spacer y={4} />
             <Button
@@ -249,7 +237,7 @@ export function OnboardingWizard({
               onPress={requestPermission}
               className="w-full"
             >
-              Next
+              {t("onboarding.wizard.states.welcome.cta")}
             </Button>
           </>
         );
@@ -257,12 +245,12 @@ export function OnboardingWizard({
         return (
           <>
             <p className="text-base text-white/80">
-              Requesting camera access. Approve the system prompt to continue.
+              {t("onboarding.wizard.states.requesting.body")}
             </p>
             <Spacer y={4} />
             <Progress
               isIndeterminate
-              aria-label="Requesting camera permission"
+              aria-label={t("onboarding.wizard.states.requesting.aria")}
             />
           </>
         );
@@ -270,9 +258,7 @@ export function OnboardingWizard({
         return (
           <>
             <p className="text-base text-white/80">
-              We need camera access to monitor your posture in real time. You
-              can enable the camera in your system settings, then return here to
-              continue onboarding.
+              {t("onboarding.wizard.states.denied.body")}
             </p>
             <Spacer y={4} />
             <Button
@@ -283,7 +269,7 @@ export function OnboardingWizard({
               onPress={openSystemSettings}
               isLoading={isOpeningSettings}
             >
-              Open System Settings
+              {t("camera.openSettings")}
             </Button>
           </>
         );
@@ -291,8 +277,7 @@ export function OnboardingWizard({
         return (
           <>
             <p className="text-base text-white/80">
-              Something went wrong while requesting camera access. Check your
-              connection and try again.
+              {t("onboarding.wizard.states.error.body")}
             </p>
             <Spacer y={4} />
             <Button
@@ -301,7 +286,7 @@ export function OnboardingWizard({
               className="w-full"
               onPress={requestPermission}
             >
-              Try Again
+              {t("onboarding.wizard.states.error.cta")}
             </Button>
           </>
         );
@@ -314,11 +299,12 @@ export function OnboardingWizard({
     return (
       <Card className="w-full max-w-xl bg-black/40 text-left backdrop-blur-xl">
         <CardHeader className="flex flex-col gap-2 text-white">
-          <h1 className="text-3xl font-semibold">Electron unavailable</h1>
+          <h1 className="text-3xl font-semibold">
+            {t("onboarding.wizard.titles.electronUnavailable")}
+          </h1>
         </CardHeader>
         <CardBody className="text-base text-white/80">
-          Posely can’t access camera permissions or calibration because the
-          Electron preload bridge is missing. Restart the app to continue.
+          {t("onboarding.wizard.messages.electronMissing")}
         </CardBody>
       </Card>
     );
@@ -338,18 +324,21 @@ export function OnboardingWizard({
         <Card className="bg-black/40 text-left backdrop-blur-xl">
           <CardHeader className="flex flex-col gap-2 text-white">
             <div className="text-sm uppercase tracking-wide text-white/60">
-              Step 1 of 2
+              {t("onboarding.wizard.stepLabel", { current: 1, total: 2 })}
             </div>
             <h1 className="text-3xl font-semibold">
-              Let&apos;s set up your posture coach
+              {t("onboarding.wizard.titles.setup")}
             </h1>
           </CardHeader>
           <CardBody className="flex flex-col gap-4">
             {renderCardBody()}
             {isCalibrationLoading ? (
               <div className="flex items-center gap-3 text-sm text-white/70">
-                <Progress isIndeterminate aria-label="Checking calibration" />
-                Checking previous calibration…
+                <Progress
+                  isIndeterminate
+                  aria-label={t("onboarding.wizard.loading.checkingLabel")}
+                />
+                {t("onboarding.wizard.loading.checkingMessage")}
               </div>
             ) : null}
           </CardBody>
