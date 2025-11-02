@@ -48,6 +48,7 @@ import {
   getDailyPostureLogByDate,
   upsertDailyPostureLog,
   getWeeklySummary,
+  calculateStreak,
 } from "./database/dailyPostureRepository";
 import { getSetting, setSetting } from "./database/settingsRepository";
 import registerCalibrationHandler from "./ipc/calibrationHandler";
@@ -271,6 +272,7 @@ const dispatchWorkerMessage = (message: WorkerMessage) => {
             secondsInRed: number;
             avgScore: number;
             sampleCount: number;
+            meetsGoal: number;
           }
         | undefined;
 
@@ -879,10 +881,14 @@ ipcMain.handle(IPC_CHANNELS.getDailySummary, async () => {
 
     // Get data from database
     const dbData = getDailyPostureLogByDate(currentDate);
+    
+    // Calculate current streak
+    const streak = calculateStreak();
 
     if (dbData) {
       logger.info("Retrieved daily summary from database", {
         date: currentDate,
+        streak,
       });
       return {
         success: true,
@@ -893,11 +899,13 @@ ipcMain.handle(IPC_CHANNELS.getDailySummary, async () => {
           secondsInRed: dbData.secondsInRed,
           avgScore: dbData.avgScore,
           sampleCount: dbData.sampleCount,
+          streak,
         },
       };
     } else {
       logger.info("No daily summary data found for today", {
         date: currentDate,
+        streak,
       });
       return {
         success: true,
@@ -908,6 +916,7 @@ ipcMain.handle(IPC_CHANNELS.getDailySummary, async () => {
           secondsInRed: 0,
           avgScore: 0,
           sampleCount: 0,
+          streak,
         },
       };
     }

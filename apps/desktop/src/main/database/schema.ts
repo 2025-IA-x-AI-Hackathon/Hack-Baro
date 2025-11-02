@@ -31,6 +31,7 @@ export const dailyPostureLogs = sqliteTable(DAILY_POSTURE_LOGS_TABLE, {
   secondsInRed: integer("seconds_in_red").notNull().default(0),
   avgScore: real("avg_score").notNull().default(0),
   sampleCount: integer("sample_count").notNull().default(0),
+  meetsGoal: integer("meets_goal").notNull().default(0),
 });
 
 export type DailyPostureLogRow = typeof dailyPostureLogs.$inferSelect;
