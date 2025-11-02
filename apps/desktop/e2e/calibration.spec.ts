@@ -49,7 +49,7 @@ test.describe("Calibration Flow", () => {
     await electronApp.evaluate(({ ipcMain }, channel) => {
       ipcMain.removeHandler(channel);
       ipcMain.handle(channel, () => ({ granted: true }));
-    }, IPC_CHANNELS.REQUEST_CAMERA_PERMISSION);
+    }, IPC_CHANNELS.requestCameraPermission);
 
     // Mock calibration request to succeed
     await electronApp.evaluate(({ ipcMain }, channel) => {
@@ -157,7 +157,7 @@ test.describe("Calibration Flow", () => {
     await electronApp.evaluate(({ ipcMain }, channel) => {
       ipcMain.removeHandler(channel);
       ipcMain.handle(channel, () => ({ granted: true }));
-    }, IPC_CHANNELS.REQUEST_CAMERA_PERMISSION);
+    }, IPC_CHANNELS.requestCameraPermission);
 
     // Mock calibration request to fail
     await electronApp.evaluate(({ ipcMain }, channel) => {
@@ -213,7 +213,7 @@ test.describe("Calibration Flow", () => {
     await electronApp.evaluate(({ ipcMain }, channel) => {
       ipcMain.removeHandler(channel);
       ipcMain.handle(channel, () => ({ granted: true }));
-    }, IPC_CHANNELS.REQUEST_CAMERA_PERMISSION);
+    }, IPC_CHANNELS.requestCameraPermission);
 
     // Navigate to calibration step
     await window.locator('button:has-text("Next")').click();
@@ -243,7 +243,7 @@ test.describe("Calibration Flow", () => {
     await electronApp.evaluate(({ ipcMain }, channel) => {
       ipcMain.removeHandler(channel);
       ipcMain.handle(channel, () => ({ granted: true }));
-    }, IPC_CHANNELS.REQUEST_CAMERA_PERMISSION);
+    }, IPC_CHANNELS.requestCameraPermission);
 
     // Mock getUserMedia to fail
     await window.evaluate(() => {
@@ -270,7 +270,7 @@ test.describe("Calibration Flow", () => {
     await electronApp.evaluate(({ ipcMain }, channel) => {
       ipcMain.removeHandler(channel);
       ipcMain.handle(channel, () => ({ granted: true }));
-    }, IPC_CHANNELS.REQUEST_CAMERA_PERMISSION);
+    }, IPC_CHANNELS.requestCameraPermission);
 
     // Navigate to calibration step
     await window.locator('button:has-text("Next")').click();
