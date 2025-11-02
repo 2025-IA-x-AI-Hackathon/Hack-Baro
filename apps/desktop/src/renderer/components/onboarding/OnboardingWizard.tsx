@@ -7,11 +7,13 @@ import {
   Progress,
   Spacer,
 } from "@heroui/react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ElectronHandler } from "../../../main/preload";
 import { IPC_CHANNELS } from "../../../shared/ipcChannels";
 import type { RendererChannel } from "../../../shared/ipcChannels";
 import { getLogger } from "../../../shared/logger";
+import type { CalibrationCompletePayload } from "../../../shared/types/calibration";
+import { CalibrationFlow } from "./CalibrationFlow";
 
 type PermissionState =
   | "welcome"
@@ -32,6 +34,7 @@ type OpenSettingsResponse = {
 
 export type OnboardingWizardProps = {
   electron?: ElectronHandler | null;
+  onComplete?: (payload: CalibrationCompletePayload | null) => void;
 };
 
 const logger = getLogger("onboarding-wizard", "renderer");
@@ -48,13 +51,83 @@ const getElectronApi = (electron?: ElectronHandler | null) => {
   return null;
 };
 
-export function OnboardingWizard({ electron = null }: OnboardingWizardProps) {
+export function OnboardingWizard({
+  electron = null,
+  onComplete,
+}: OnboardingWizardProps) {
   const [permissionState, setPermissionState] =
     useState<PermissionState>("welcome");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isOpeningSettings, setIsOpeningSettings] = useState(false);
+  const [calibration, setCalibration] =
+    useState<CalibrationCompletePayload | null>(null);
+  const [isCalibrationLoading, setIsCalibrationLoading] = useState(false);
+  const [calibrationLoadError, setCalibrationLoadError] = useState<
+    string | null
+  >(null);
 
   const electronApi = useMemo(() => getElectronApi(electron), [electron]);
+
+  useEffect(() => {
+    if (!electronApi || calibration) {
+      return;
+    }
+    let cancelled = false;
+    const loadExistingCalibration = async () => {
+      const loadChannel: RendererChannel =
+        electronApi.channels?.calibrationLoad ?? IPC_CHANNELS.calibrationLoad;
+      try {
+        setIsCalibrationLoading(true);
+        const response = (await electronApi.ipcRenderer.invoke(
+          loadChannel,
+        )) as CalibrationCompletePayload | null;
+        if (cancelled) {
+          return;
+        }
+        if (response) {
+          setCalibration(response);
+          setPermissionState("granted");
+        }
+      } catch (error: unknown) {
+        if (cancelled) {
+          return;
+        }
+        logger.error("Failed to load existing calibration", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        setCalibrationLoadError(
+          "We couldn’t load your previous calibration. Please run calibration again.",
+        );
+      } finally {
+        if (!cancelled) {
+          setIsCalibrationLoading(false);
+        }
+      }
+    };
+
+    loadExistingCalibration().catch((error: unknown) => {
+      if (cancelled) {
+        return;
+      }
+      logger.error("Unexpected calibration load failure", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      setCalibrationLoadError(
+        "We couldn’t load your previous calibration. Please run calibration again.",
+      );
+      setIsCalibrationLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [calibration, electronApi]);
+
+  useEffect(() => {
+    if (calibration) {
+      onComplete?.(calibration);
+    }
+  }, [calibration, onComplete]);
 
   const requestPermission = useCallback(() => {
     if (!electronApi) {
@@ -122,7 +195,8 @@ export function OnboardingWizard({ electron = null }: OnboardingWizardProps) {
 
     const { ipcRenderer, channels } = electronApi;
     const openSettingsChannel: RendererChannel =
-      channels?.openCameraSettings ?? IPC_CHANNELS.openCameraSettings;
+      channels?.openCameraPrivacySettings ??
+      IPC_CHANNELS.openCameraPrivacySettings;
     setIsOpeningSettings(true);
     setErrorMessage(null);
 
@@ -192,19 +266,6 @@ export function OnboardingWizard({ electron = null }: OnboardingWizardProps) {
             />
           </>
         );
-      case "granted":
-        return (
-          <>
-            <p className="text-base text-white/80">
-              Thank you! Camera access is enabled. We&apos;ll guide you through
-              positioning your workspace next.
-            </p>
-            <Spacer y={4} />
-            <Button color="primary" size="lg" className="w-full" isDisabled>
-              Continue
-            </Button>
-          </>
-        );
       case "denied":
         return (
           <>
@@ -249,26 +310,79 @@ export function OnboardingWizard({ electron = null }: OnboardingWizardProps) {
     }
   };
 
+  if (!electronApi) {
+    return (
+      <Card className="w-full max-w-xl bg-black/40 text-left backdrop-blur-xl">
+        <CardHeader className="flex flex-col gap-2 text-white">
+          <h1 className="text-3xl font-semibold">Electron unavailable</h1>
+        </CardHeader>
+        <CardBody className="text-base text-white/80">
+          Posely can’t access camera permissions or calibration because the
+          Electron preload bridge is missing. Restart the app to continue.
+        </CardBody>
+      </Card>
+    );
+  }
+
+  if (calibration) {
+    // Onboarding finished; hand control back to parent.
+    return null;
+  }
+
+  const shouldShowPermissionCard = permissionState !== "granted";
+  const showCalibrationFlow = permissionState === "granted";
+
   return (
-    <Card className="w-full max-w-xl bg-black/40 text-left backdrop-blur-xl">
-      <CardHeader className="flex flex-col gap-2 text-white">
-        <div className="text-sm uppercase tracking-wide text-white/60">
-          Step {permissionState === "granted" ? "2" : "1"} of 3
-        </div>
-        <h1 className="text-3xl font-semibold">
-          Let&apos;s set up your posture coach
-        </h1>
-      </CardHeader>
-      <CardBody className="flex flex-col gap-4">{renderCardBody()}</CardBody>
-      {errorMessage ? (
-        <CardFooter className="border-t border-white/10 pt-4">
-          <p className="text-sm text-red-200">{errorMessage}</p>
-        </CardFooter>
+    <div className="flex w-full max-w-3xl flex-col gap-6">
+      {shouldShowPermissionCard ? (
+        <Card className="bg-black/40 text-left backdrop-blur-xl">
+          <CardHeader className="flex flex-col gap-2 text-white">
+            <div className="text-sm uppercase tracking-wide text-white/60">
+              Step 1 of 2
+            </div>
+            <h1 className="text-3xl font-semibold">
+              Let&apos;s set up your posture coach
+            </h1>
+          </CardHeader>
+          <CardBody className="flex flex-col gap-4">
+            {renderCardBody()}
+            {isCalibrationLoading ? (
+              <div className="flex items-center gap-3 text-sm text-white/70">
+                <Progress isIndeterminate aria-label="Checking calibration" />
+                Checking previous calibration…
+              </div>
+            ) : null}
+          </CardBody>
+          {errorMessage ? (
+            <CardFooter className="border-t border-white/10 pt-4">
+              <p className="text-sm text-red-200">{errorMessage}</p>
+            </CardFooter>
+          ) : null}
+          {calibrationLoadError ? (
+            <CardFooter className="border-t border-white/10 pt-4">
+              <p className="text-sm text-amber-200">{calibrationLoadError}</p>
+            </CardFooter>
+          ) : null}
+        </Card>
       ) : null}
-    </Card>
+
+      {showCalibrationFlow ? (
+        <CalibrationFlow
+          electron={electronApi}
+          completionDelayMs={600}
+          onComplete={
+            () => {}
+            //   (payload) => {
+            //   setCalibration(payload);
+            // }
+          }
+        />
+      ) : null}
+    </div>
   );
 }
 
 OnboardingWizard.defaultProps = {
   electron: null,
+  onComplete: undefined,
 } satisfies Partial<OnboardingWizardProps>;
