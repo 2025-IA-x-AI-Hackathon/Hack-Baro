@@ -55,6 +55,7 @@ export const electronHandler = {
       process.env.POSELY_DEBUG_ALLOW_UNRELIABLE_SIGNALS,
     POSELY_DEBUG_GUARDRAILS_VERBOSE:
       process.env.POSELY_DEBUG_GUARDRAILS_VERBOSE,
+    POSELY_CALIBRATION_DEBUG: process.env.POSELY_CALIBRATION_DEBUG,
     POSELY_ENABLE_EXPERIMENTAL_SCORING:
       process.env.POSELY_ENABLE_EXPERIMENTAL_SCORING,
     POSELY_SIGNAL_TRACE: process.env.POSELY_SIGNAL_TRACE,
@@ -110,6 +111,7 @@ export const electronHandler = {
     POSELY_SCORE_W_PITCH: process.env.POSELY_SCORE_W_PITCH,
     POSELY_SCORE_W_EHD: process.env.POSELY_SCORE_W_EHD,
     POSELY_SCORE_W_DPR: process.env.POSELY_SCORE_W_DPR,
+    POSELY_DASHBOARD_HTTP_ORIGIN: process.env.POSELY_DASHBOARD_HTTP_ORIGIN,
     npm_package_version: process.env.npm_package_version,
   },
 };

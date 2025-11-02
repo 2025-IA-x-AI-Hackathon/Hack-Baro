@@ -42,14 +42,42 @@ const createDatabase = (): BetterSQLite3Database<typeof schema> => {
       `,
     )
     .run();
-
   sqlite
     .prepare(
       `
-        CREATE TABLE IF NOT EXISTS ${SETTINGS_TABLE} (
-          key TEXT PRIMARY KEY NOT NULL,
-          value TEXT NOT NULL
+        CREATE TABLE IF NOT EXISTS posture_calibration (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL DEFAULT 1,
+          baseline_pitch REAL NOT NULL,
+          baseline_ehd REAL NOT NULL,
+          baseline_dpr REAL NOT NULL,
+          quality INTEGER NOT NULL,
+          sample_count INTEGER NOT NULL,
+          sensitivity TEXT NOT NULL DEFAULT 'medium',
+          custom_pitch_threshold REAL,
+          custom_ehd_threshold REAL,
+          custom_dpr_threshold REAL,
+          calibrated_at INTEGER NOT NULL,
+          is_active INTEGER NOT NULL DEFAULT 1,
+          created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+          updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
         )
+      `,
+    )
+    .run();
+  sqlite
+    .prepare(
+      `
+        CREATE INDEX IF NOT EXISTS posture_calibration_user_active_idx
+        ON posture_calibration(user_id, is_active)
+      `,
+    )
+    .run();
+  sqlite
+    .prepare(
+      `
+        CREATE INDEX IF NOT EXISTS posture_calibration_calibrated_at_idx
+        ON posture_calibration(calibrated_at)
       `,
     )
     .run();
@@ -64,11 +92,40 @@ const createDatabase = (): BetterSQLite3Database<typeof schema> => {
           seconds_in_yellow INTEGER NOT NULL DEFAULT 0,
           seconds_in_red INTEGER NOT NULL DEFAULT 0,
           avg_score REAL NOT NULL DEFAULT 0,
-          sample_count INTEGER NOT NULL DEFAULT 0
+          sample_count INTEGER NOT NULL DEFAULT 0,
+          meets_goal INTEGER NOT NULL DEFAULT 0
         )
       `,
     )
     .run();
+
+  sqlite
+    .prepare(
+      `
+        CREATE TABLE IF NOT EXISTS ${SETTINGS_TABLE} (
+          key TEXT PRIMARY KEY NOT NULL,
+          value TEXT NOT NULL
+        )
+      `,
+    )
+    .run();
+
+  // Add meets_goal column to existing tables if it doesn't exist
+  try {
+    sqlite
+      .prepare(
+        `ALTER TABLE ${DAILY_POSTURE_LOGS_TABLE} ADD COLUMN meets_goal INTEGER NOT NULL DEFAULT 0`,
+      )
+      .run();
+  } catch (error: unknown) {
+    // Column already exists or table doesn't exist yet - this is fine
+    if (
+      error instanceof Error &&
+      !error.message.includes("duplicate column name")
+    ) {
+      throw error;
+    }
+  }
 
   return drizzle(sqlite, {
     schema,
