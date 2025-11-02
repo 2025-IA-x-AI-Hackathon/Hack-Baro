@@ -660,6 +660,10 @@ export class DetectionPipeline {
     };
   }
 
+  getCameraStream(): MediaStream | null {
+    return this.camera.getStream();
+  }
+
   getLatestLandmarks(): CombinedLandmarks | null {
     return this.latestLandmarks;
   }
