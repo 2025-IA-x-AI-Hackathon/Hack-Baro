@@ -7,8 +7,11 @@ onlyBuiltDependencies:
   - "@parcel/watcher"
   - "@swc/core"
   - "@tailwindcss/oxide"
+  - "better-sqlite3"
   - core-js
   - core-js-pure
   - electron
   - electron-winstaller
+  - esbuild
+  - protobufjs
   - unrs-resolver
