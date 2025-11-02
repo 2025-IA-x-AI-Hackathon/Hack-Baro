@@ -1,51 +1,62 @@
-# Posely Desktop Integration Notes
+# Posely Desktop 통합 노트 (Integration Notes)
 
-This document tracks the changes made while embedding Electron React Boilerplate into the Posely Turborepo.
+이 문서는 Electron React Boilerplate를 Posely Turborepo에 통합하면서 발생한 변경사항을 기록합니다.
 
-## Workspace Integration
+***
 
-- Package renamed to `@baro/desktop` and registered as a Turborepo workspace package.
-- Scripts updated to use pnpm and wired into the shared Turbo pipelines (`dev`, `build`, `lint`, `type-check`).
-- Added workspace dependencies on `@heroui/react`, `@heroui/theme`, `framer-motion`, `@baro/eslint-config`, and `@baro/typescript-config`.
-- Shared TypeScript configuration is inherited from `@baro/typescript-config/base.json` with monorepo-aware path mappings for `@baro/*` imports.
+## 워크스페이스 통합
 
-## Build Configuration
+- 패키지명을 `@baro/desktop`으로 변경하고 Turborepo 워크스페이스에 등록
+- 스크립트를 `pnpm` 기반으로 변경하고 Turbo 파이프라인(`dev`, `build`, `lint`, `type-check`)에 통합
+- `@heroui/react`, `@heroui/theme`, `framer-motion`, `@baro/eslint-config`, `@baro/typescript-config` 등 공용 의존성 추가
+- TypeScript 설정은 `@baro/typescript-config/base.json`을 상속하며, `@baro/*` 경로 매핑 지원
 
-- Webpack base config now transpiles workspace packages and resolves modules from `packages/`.
-- Main-process webpack entries include a worker bundle so the worker thread is built alongside main and preload outputs.
-- Release runtime package (`release/app/package.json`) updated for pnpm-based installs.
 
-## IPC and Worker Architecture
+## 빌드 구성
 
-- New shared channel definitions live in `src/shared/ipcChannels.ts`.
-- The main process launches a dedicated worker thread (`src/worker/index.ts`) and forwards worker messages to the renderer.
-- Renderer exposes actions for pinging the main process and worker, with responses rendered in real time.
-- IPC bridge is hardened in `preload.ts` to validate channel usage before forwarding to Electron.
+- Webpack 기본 설정이 `packages/` 폴더의 워크스페이스 패키지까지 트랜스파일하도록 수정
+- 메인 프로세스 Webpack 엔트리에 워커 번들을 추가하여 main/preload와 함께 빌드
+- `release/app/package.json`을 `pnpm` 기반 설치 구조로 업데이트
 
-## Renderer Updates
+## IPC 및 워커 구조
 
-- Renderer UI imports components from `@heroui/react` and surfaces integration diagnostics (main response, worker status, worker response).
-- Initial worker status requests happen automatically once listeners are registered, ensuring state remains in sync across reloads.
+- 공용 IPC 채널 정의: `src/shared/ipcChannels.ts`
+- 메인 프로세스에서 전용 워커 스레드(`src/worker/index.ts`)를 실행하고 메시지를 렌더러로 전달
+- 렌더러는 메인/워커 상태를 실시간으로 표시하는 ping/pong 액션 제공
+- `preload.ts`에서 채널 유효성을 검증하도록 IPC 브릿지 강화
 
-## Developer Commands
+## 렌더러 업데이트
+
+- `@heroui/react` 기반 UI로 통합 진단 화면(main 응답, worker 상태, worker 응답) 표시
+- 리스너가 등록되면 자동으로 워커 상태 요청을 전송하여 상태 동기화 유지
+
+---
+
+## 개발 명령어
 
 ```bash
-pnpm dev       # Runs the desktop app in development mode via Turborepo
-pnpm build     # Builds renderer + main bundles
-pnpm package   # Produces distributable artifacts with electron-builder
-pnpm lint      # Executes lint rules (shared config via @baro/eslint-config)
-pnpm type-check # Validates TypeScript types across main/renderer/worker
+pnpm dev        # 개발 모드 실행 (Turborepo)
+pnpm build      # main + renderer 빌드
+pnpm package    # electron-builder로 배포용 패키징
+pnpm lint       # 공통 ESLint 설정으로 린트 검사
+pnpm type-check # main/renderer/worker 타입 검증
 ```
 
-## Environment Separation & CI/CD
+## 환경 분리 및 CI/CD
 
-- **Local development installs** – use `pnpm run desktop:install:dev` (sets `BARO_SKIP_ELECTRON_BUILDER=1`) so pnpm skips Electron Builder’s native dependency rebuild during install. Follow with `pnpm run desktop:dev` to start the desktop workspace via Turbo.
-- **Packaging** – run `pnpm run desktop:package` (or `pnpm --filter @baro/desktop package`) which invokes Electron Builder to generate platform-specific artifacts in `release/build/`. Ensure `BARO_SKIP_ELECTRON_BUILDER` is unset before packaging if you previously exported it. macOS packaging requires an Apple Development/Distribution certificate in your login keychain; if multiple identities share the same name, either remove duplicates in Keychain Access or run with `CSC_IDENTITY_AUTO_DISCOVERY=false` and `CSC_NAME="Apple Development: Your Name (TEAMID)"`. To generate unsigned builds for quick validation, set `CSC_IDENTITY_AUTO_DISCOVERY=false` with an empty `CSC_NAME`.
-- **Continuous Integration** – `.github/workflows/ci.yml` installs with `--frozen-lockfile` and runs `pnpm turbo run type-check lint build` under `BARO_SKIP_ELECTRON_BUILDER=1` to keep pipeline deterministic. Release tags trigger `.github/workflows/release.yml`, which installs (skipping native rebuilds), runs the desktop build, executes the packaging script per operating system, and uploads the generated artifacts.
+**로컬 개발용 설치** - `pnpm run desktop:install:dev` 실행 시 `BARO_SKIP_ELECTRON_BUILDER=1`로 설정되어 Electron Builder의 네이티브 의존성 리빌드를 건너뜁니다.
+이후 pnpm run desktop:dev로 Turbo를 통해 데스크톱 워크스페이스 실행
 
-## Upgrade Notes
+**패키징** - `pnpm run desktop:package` 또는 `pnpm --filter @baro/desktop package` 를 실행하여 `release/build/` 폴더에 플랫폼별 아티팩트를 생성합니다.
+macOS에서는 Apple Developer/Distribution 인증서가 필요하며, 서명 없이 빠르게 테스트하려면 `CSC_IDENTITY_AUTO_DISCOVERY=false`와 빈 `CSC_NAME`을 설정합니다.
 
-- When pulling upstream Electron React Boilerplate changes, verify updates in `.erb/` configs and re-run through Turborepo scripts.
-- Confirm any new upstream dependencies remain compatible with pnpm workspaces and the shared lint/config packages.
-- Keep worker message contracts documented in `src/shared/ipcChannels.ts` to maintain compatibility across processes.
+**CI/CD** - `.github/workflows/ci.yml`은 `--frozen-lockfile` 옵션으로 설치 후 `pnpm turbo run type-check lint build`를 실행합니다.
+릴리스 태그 생성 시 `.github/workflows/release.yml`이 실행되어 OS별 빌드 및 패키징을 수행하고 결과물을 업로드합니다.
 
+## 업그레이드 참고사항
+
+- Electron React Boilerplate 업스트림 변경사항을 가져올 경우 `.erb/` 구성 변경을 확인하고 Turbo 스크립트로 재검증
+
+- 새로운 의존성이 `pnpm workspace` 및 공용 설정과 호환되는지 확인
+
+- 프로세스 간 호환성을 유지하기 위해 `src/shared/ipcChannels.ts` 내 메시지 계약을 최신 상태로 유지
