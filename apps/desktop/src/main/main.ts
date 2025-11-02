@@ -473,6 +473,7 @@ const updateTrayIcon = (tick: EngineTick) => {
       reliability: tick.reliability,
       iconPath: iconPath.split("/").pop(), // Just the filename
       tooltip,
+      isPaused,
     });
 
     // E2E Testing: Expose state for verification
@@ -492,6 +493,13 @@ const updateTrayIcon = (tick: EngineTick) => {
     // Use nativeImage to support both PNG and SVG
     const image = nativeImage.createFromPath(iconPath);
     if (!image.isEmpty()) {
+      // DO NOT use setTemplateImage for colored icons
+      // Template images are converted to monochrome by macOS
+      // Only use template mode for monochrome icons that should adapt to light/dark mode
+      if (process.platform === "darwin") {
+        // For colored tray icons, we need to disable template mode
+        image.setTemplateImage(false);
+      }
       trayInstance.setImage(image);
       trayInstance.setToolTip(tooltip);
       // Update menu with current status
@@ -509,12 +517,16 @@ const broadcastEngineTick = (tick: EngineTick) => {
     score: tick.score,
     state: tick.state,
     presence: tick.presence,
+    isPaused,
   });
 
   latestEngineTick = tick;
 
-  // Update tray icon based on score
-  updateTrayIcon(tick);
+  // Update tray icon based on score (unless manually paused)
+  // When paused, keep the gray icon
+  if (!isPaused) {
+    updateTrayIcon(tick);
+  }
 
   // Process tick for data aggregation
   processEngineTick(tick);
@@ -1602,6 +1614,12 @@ const createTray = () => {
   const iconPath = getAssetPath("icons", "tray-gray.png");
   const image = nativeImage.createFromPath(iconPath);
 
+  // DO NOT use setTemplateImage for colored icons
+  // Template images are converted to monochrome by macOS
+  if (process.platform === "darwin") {
+    image.setTemplateImage(false);
+  }
+
   try {
     tray = new Tray(image);
     tray.setToolTip("Posely - Starting up…");
@@ -1612,6 +1630,7 @@ const createTray = () => {
 
     logger.info("Tray icon initialized with organized menu structure", {
       iconPath,
+      platform: process.platform,
     });
   } catch (error) {
     logger.error("Failed to create tray icon", toErrorPayload(error));
@@ -1895,6 +1914,12 @@ const onAppReady = async () => {
 
     // Cmd+1: Test with score 90 (green)
     globalShortcut.register("CommandOrControl+1", () => {
+      // Unpause monitoring to allow icon change
+      if (isPaused) {
+        isPaused = false;
+        logger.info("🧪 TEST: Auto-unpaused monitoring for testing");
+      }
+
       const testTick: EngineTick = {
         t: Date.now(),
         presence: "PRESENT",
@@ -1910,6 +1935,12 @@ const onAppReady = async () => {
 
     // Cmd+2: Test with score 65 (yellow - below threshold)
     globalShortcut.register("CommandOrControl+2", () => {
+      // Unpause monitoring to allow icon change
+      if (isPaused) {
+        isPaused = false;
+        logger.info("🧪 TEST: Auto-unpaused monitoring for testing");
+      }
+
       const testTick: EngineTick = {
         t: Date.now(),
         presence: "PRESENT",
@@ -1928,6 +1959,12 @@ const onAppReady = async () => {
 
     // Cmd+3: Test with score 50 (red)
     globalShortcut.register("CommandOrControl+3", () => {
+      // Unpause monitoring to allow icon change
+      if (isPaused) {
+        isPaused = false;
+        logger.info("🧪 TEST: Auto-unpaused monitoring for testing");
+      }
+
       const testTick: EngineTick = {
         t: Date.now(),
         presence: "PRESENT",
@@ -1941,8 +1978,9 @@ const onAppReady = async () => {
       broadcastEngineTick(testTick);
     });
 
-    // Cmd+0: Test IDLE state (gray)
-    globalShortcut.register("CommandOrControl+0", () => {
+    // Cmd+4: Test IDLE state (gray)
+    globalShortcut.register("CommandOrControl+4", () => {
+      // IDLE state should work even when paused
       const testTick: EngineTick = {
         t: Date.now(),
         presence: "ABSENT",
@@ -1952,16 +1990,19 @@ const onAppReady = async () => {
         score: 70,
         metrics: { pitchDeg: 0, ehdNorm: 0, dpr: 1.0, conf: 0 },
       };
-      logger.info("🧪 TEST: Injecting IDLE EngineTick", testTick);
-      broadcastEngineTick(testTick);
+      logger.info("🧪 TEST: Injecting IDLE EngineTick (gray)", testTick);
+
+      // For IDLE state, update icon directly regardless of pause state
+      updateTrayIcon(testTick);
+      latestEngineTick = testTick;
     });
 
     logger.info("🎹 Test keyboard shortcuts registered", {
       shortcuts: [
-        "Cmd+1: Score 90 (green)",
-        "Cmd+2: Score 65 (yellow/red - below threshold)",
-        "Cmd+3: Score 50 (red)",
-        "Cmd+0: IDLE (gray)",
+        "Cmd+1: Score 90 (GREEN) - auto-unpauses",
+        "Cmd+2: Score 65 (YELLOW) - auto-unpauses",
+        "Cmd+3: Score 50 (RED) - auto-unpauses",
+        "Cmd+4: IDLE (GRAY) - works regardless of pause state",
         "Note: Set DISABLE_TEST_SHORTCUTS=true to disable if interfering with system shortcuts",
       ],
       mode: USE_SIMPLE_THRESHOLD
