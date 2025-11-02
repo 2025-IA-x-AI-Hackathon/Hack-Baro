@@ -5,8 +5,7 @@
     "getStarted": "시작하기"
   },
   "app": {
-    "tagline": "Electron-React-Boilerplate가 이제 Turborepo 워크스페이스에 통합되었습니다. 아래 동작을 사용해 IPC와 워커 통신을 확인하세요.",
-    "title": "포슬리 데스크톱"
+    "title": "포슬리"
   },
   "cards": {
     "documentation": {
