@@ -1079,6 +1079,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
               <h1 className="text-3xl font-semibold text-white md:text-4xl">
                 {defaults.title}
               </h1>
+              <p className="mt-2 text-white/80">{defaults.description}</p>
             </div>
           </div>
           <LanguageSwitcher />
