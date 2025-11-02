@@ -803,25 +803,9 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
               <h1 className="text-3xl font-semibold text-white md:text-4xl">
                 {defaults.title}
               </h1>
-              <p className="mt-2 max-w-2xl text-base text-white/85 md:text-lg">
-                {defaults.tagline}
-              </p>
             </div>
           </div>
           <LanguageSwitcher />
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <Button color="primary" size="lg" onPress={sendPing}>
-            {defaults.pingMain}
-          </Button>
-          <Button
-            color="secondary"
-            size="lg"
-            variant="bordered"
-            onPress={pingWorker}
-          >
-            {defaults.pingWorker}
-          </Button>
         </div>
       </header>
 
@@ -873,7 +857,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
       </section>
 
       {onboardingComplete ? (
-        <section className="flex justify-center">
+        <section className="flex justify-between">
           <Card className="w-full max-w-3xl bg-black/40 text-left backdrop-blur-xl">
             <CardHeader className="flex flex-col gap-2 text-white">
               <h2 className="text-lg font-semibold">
@@ -1120,6 +1104,15 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
               ) : null}
             </CardFooter>
           </Card>
+
+          <DetectionDebugHud
+            state={detectionDebug ?? null}
+            visible={showDebugHud}
+            overlay={cameraPreviewToggle && detectionEnabled}
+            classNames={{
+              container: "flex w-full",
+            }}
+          />
         </section>
       ) : null}
 
@@ -1168,47 +1161,6 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
       </section>
 
       <section className="grid gap-4 md:grid-cols-4 xl:grid-cols-5">
-        <Card className="bg-black/30 text-left backdrop-blur-lg">
-          <CardHeader className="flex flex-col gap-1 text-white">
-            <span className="text-sm uppercase tracking-wide text-white/60">
-              {defaults.mainProcess}
-            </span>
-            <h2 className="text-lg font-semibold text-white">Main Process</h2>
-          </CardHeader>
-          <CardBody>
-            <Code className="whitespace-pre-wrap break-words text-sm">
-              {mainResponse.value}
-            </Code>
-          </CardBody>
-        </Card>
-        <Card className="bg-black/30 text-left backdrop-blur-lg">
-          <CardHeader className="flex flex-col gap-1 text-white">
-            <span className="text-sm uppercase tracking-wide text-white/60">
-              {defaults.workerStatus}
-            </span>
-            <h2 className="text-lg font-semibold text-white">Worker Status</h2>
-          </CardHeader>
-          <CardBody>
-            <Code className="whitespace-pre-wrap break-words text-sm">
-              {workerStatus.value}
-            </Code>
-          </CardBody>
-        </Card>
-        <Card className="bg-black/30 text-left backdrop-blur-lg">
-          <CardHeader className="flex flex-col gap-1 text-white">
-            <span className="text-sm uppercase tracking-wide text-white/60">
-              {defaults.workerResponse}
-            </span>
-            <h2 className="text-lg font-semibold text-white">
-              Worker Response
-            </h2>
-          </CardHeader>
-          <CardBody>
-            <Code className="whitespace-pre-wrap break-words text-sm">
-              {workerResponse.value}
-            </Code>
-          </CardBody>
-        </Card>
         <Card className="bg-black/30 text-left backdrop-blur-lg">
           <CardHeader className="flex flex-col gap-1 text-white">
             <span className="text-sm uppercase tracking-wide text-white/60">
@@ -1522,155 +1474,17 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
         </Card>
       </section>
 
-      <ExampleHeroUI
+      {/* <ExampleHeroUI
         engineTick={engineTick}
         onPingMain={sendPing}
         onPingWorker={pingWorker}
-      />
+      /> */}
 
       <DetectionDebugHud
         state={detectionDebug ?? null}
         visible={showDebugHud}
         overlay={cameraPreviewToggle && detectionEnabled}
       />
-
-      <section className="grid gap-4 md:grid-cols-2">
-        <Card className="bg-white/10 text-left backdrop-blur">
-          <CardHeader className="flex items-start justify-between gap-4">
-            <h3 className="text-xl font-semibold text-white">
-              {defaults.documentationTitle}
-            </h3>
-            <Link
-              color="primary"
-              href="https://electron-react-boilerplate.js.org/"
-              isExternal
-              underline="always"
-            >
-              Docs
-            </Link>
-          </CardHeader>
-          <CardBody className="text-sm text-white/80">
-            {defaults.documentationBody}
-          </CardBody>
-          <CardFooter className="text-xs text-white/60">
-            Explore Electron React Boilerplate resources.
-          </CardFooter>
-        </Card>
-        <Card className="bg-white/10 text-left backdrop-blur">
-          <CardHeader className="flex items-start justify-between gap-4">
-            <h3 className="text-xl font-semibold text-white">
-              {defaults.turborepoTitle}
-            </h3>
-            <Link
-              color="primary"
-              href="https://turborepo.org/docs"
-              isExternal
-              underline="always"
-            >
-              Turborepo
-            </Link>
-          </CardHeader>
-          <CardBody className="text-sm text-white/80">
-            {defaults.turborepoBody}
-          </CardBody>
-          <CardFooter className="text-xs text-white/60">
-            Learn how Turborepo powers the build pipeline.
-          </CardFooter>
-        </Card>
-      </section>
-
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-bold">
-            {t("cards.documentation.title")}
-          </h2>
-        </CardHeader>
-        <CardBody>
-          <p>{defaults.documentationBody}</p>
-        </CardBody>
-        <CardFooter>
-          <Link
-            href="https://www.electronjs.org/docs/latest/"
-            target="_blank"
-            aria-label="Electron"
-          >
-            {t("actions.getStarted")}
-          </Link>
-        </CardFooter>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-bold">
-            {t("cards.errorMonitoring.title", "Error Monitoring (Live Sentry)")}
-          </h2>
-        </CardHeader>
-        <CardBody>
-          <p>
-            {t(
-              "cards.errorMonitoring.body",
-              "These actions raise real errors using your configured Sentry project. Use them to validate instrumentation across processes and clear the events afterwards.",
-            )}
-          </p>
-        </CardBody>
-        <CardFooter className="flex justify-end space-x-2">
-          <Button
-            color="danger"
-            onPress={() => {
-              throw new Error("Intentional Renderer Error");
-            }}
-          >
-            {t("actions.triggerRendererError", "Trigger Renderer Error")}
-          </Button>
-          <Button
-            color="danger"
-            onPress={() => {
-              ipcRenderer
-                .invoke(channels.triggerMainError as RendererChannel)
-                .catch((error: unknown) => {
-                  logger.error(
-                    "Failed to trigger main process error from renderer",
-                    {
-                      error:
-                        error instanceof Error ? error.message : String(error),
-                      stack: error instanceof Error ? error.stack : undefined,
-                    },
-                  );
-                });
-            }}
-          >
-            {t("actions.triggerMainError", "Trigger Main Error")}
-          </Button>
-          <Button
-            color="danger"
-            onPress={() =>
-              ipcRenderer.sendMessage(
-                channels.triggerWorkerError as RendererChannel,
-              )
-            }
-          >
-            {t("actions.triggerWorkerError", "Trigger Worker Error")}
-          </Button>
-        </CardFooter>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-bold">{defaults.turborepoTitle}</h2>
-        </CardHeader>
-        <CardBody>
-          <p>{defaults.turborepoBody}</p>
-        </CardBody>
-        <CardFooter>
-          <Link
-            href="https://turborepo.org/docs"
-            target="_blank"
-            aria-label="Turborepo"
-          >
-            {t("actions.getStarted")}
-          </Link>
-        </CardFooter>
-      </Card>
     </div>
   );
 }
