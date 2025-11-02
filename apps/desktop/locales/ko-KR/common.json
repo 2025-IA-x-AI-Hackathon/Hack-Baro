@@ -5,7 +5,8 @@
     "getStarted": "시작하기"
   },
   "app": {
-    "title": "포슬리"
+    "title": "포슬리",
+    "description": "거북목을 막고 목 피로를 줄여 생산성을 높이세요."
   },
   "cards": {
     "documentation": {

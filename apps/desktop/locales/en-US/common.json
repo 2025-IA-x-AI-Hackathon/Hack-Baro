@@ -5,7 +5,8 @@
     "getStarted": "Get Started"
   },
   "app": {
-    "title": "Posely"
+    "title": "Posely",
+    "description": "Prevent tech neck and reduce neck strain to boost productivity."
   },
   "cards": {
     "documentation": {
