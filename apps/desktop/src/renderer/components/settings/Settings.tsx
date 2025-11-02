@@ -2,191 +2,136 @@ import {
   Button,
   Card,
   CardBody,
+  CardFooter,
   CardHeader,
   Checkbox,
   Slider,
 } from "@heroui/react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { IPC_CHANNELS } from "../../../shared/ipcChannels";
 import { getLogger } from "../../../shared/logger";
 
-const logger = getLogger("settings-component", "renderer");
+const logger = getLogger("settings", "renderer");
 
-const toErrorPayload = (error: unknown) => ({
-  error: error instanceof Error ? error.message : String(error),
-  stack: error instanceof Error ? error.stack : undefined,
-});
-
-export function Settings() {
+function Settings() {
   const { t } = useTranslation(["common"]);
-  const [electron, setElectron] = useState<typeof window.electron | null>(null);
-
   const [launchAtStartup, setLaunchAtStartup] = useState(false);
   const [sensitivity, setSensitivity] = useState(50);
   const [isLoading, setIsLoading] = useState(true);
-  const [electronCheckAttempts, setElectronCheckAttempts] = useState(0);
 
-  // Wait for electron to be available with retry logic
+  // Load initial settings on mount
   useEffect(() => {
-    const maxAttempts = 50; // 50 * 100ms = 5 seconds max
-    
-    const checkElectron = () => {
-      if (window.electron) {
-        logger.info("Electron API found", { attempts: electronCheckAttempts + 1 });
-        setElectron(window.electron);
-        setIsLoading(false);
-        return true;
-      }
-      return false;
-    };
-
-    // Check immediately
-    if (checkElectron()) {
-      return;
-    }
-
-    // Check repeatedly
-    const interval = setInterval(() => {
-      if (checkElectron()) {
-        clearInterval(interval);
-        return;
-      }
-
-      setElectronCheckAttempts(prev => {
-        const newAttempts = prev + 1;
-        if (newAttempts >= maxAttempts) {
-          logger.error("Electron API not available after max attempts", { 
-            attempts: newAttempts,
-            windowElectron: typeof window.electron
-          });
-          setIsLoading(false);
-          clearInterval(interval);
-        }
-        return newAttempts;
-      });
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, [electronCheckAttempts]);
-
-  // Fetch initial settings on mount
-  useEffect(() => {
-    if (!electron) {
-      return;
-    }
-
-    const fetchSettings = async () => {
+    const loadSettings = async () => {
       try {
-        setIsLoading(true);
+        const { electron } = window;
+        if (!electron?.ipcRenderer) {
+          logger.error("IPC renderer not available");
+          return;
+        }
 
-        // Fetch launch at startup setting
-        const launchResult = await electron.ipcRenderer.invoke(
+        // Get launch at startup setting
+        const launchAtStartupValue = (await electron.ipcRenderer.invoke(
           IPC_CHANNELS.getSetting,
           "launchAtStartup",
-        );
-        if (launchResult === "true") {
+        )) as string | undefined;
+        if (launchAtStartupValue === "true") {
           setLaunchAtStartup(true);
         }
 
-        // Fetch sensitivity setting
-        const sensitivityResult = await electron.ipcRenderer.invoke(
+        // Get sensitivity setting
+        const sensitivityValue = (await electron.ipcRenderer.invoke(
           IPC_CHANNELS.getSetting,
           "sensitivity",
-        );
-        if (sensitivityResult) {
-          const parsedSensitivity = parseInt(sensitivityResult, 10);
-          if (!isNaN(parsedSensitivity)) {
+        )) as string | undefined;
+        if (sensitivityValue) {
+          const parsedSensitivity = parseInt(String(sensitivityValue), 10);
+          if (!Number.isNaN(parsedSensitivity)) {
             setSensitivity(parsedSensitivity);
           }
         }
 
-        logger.info("Settings loaded successfully", {
-          launchAtStartup: launchResult,
-          sensitivity: sensitivityResult,
-        });
+        setIsLoading(false);
       } catch (error) {
-        logger.error("Failed to load settings", toErrorPayload(error));
-      } finally {
+        logger.error("Failed to load settings", {
+          error: error instanceof Error ? error.message : String(error),
+        });
         setIsLoading(false);
       }
     };
 
-    fetchSettings();
-  }, [electron]);
+    loadSettings().catch((err) => {
+      logger.error("Unexpected error loading settings", { error: err });
+    });
+  }, []);
 
-  // Handle launch at startup toggle
-  const handleLaunchAtStartupChange = async (checked: boolean) => {
-    if (!electron) return;
-    
+  const handleLaunchAtStartupChange = useCallback(async (checked: boolean) => {
     try {
+      const { electron } = window;
+      if (!electron?.ipcRenderer) {
+        logger.error("IPC renderer not available");
+        return;
+      }
+
       setLaunchAtStartup(checked);
       await electron.ipcRenderer.invoke(
         IPC_CHANNELS.setSetting,
         "launchAtStartup",
-        String(checked),
+        checked ? "true" : "false",
       );
-      logger.info("Launch at startup setting updated", { value: checked });
+      logger.info(`Launch at startup setting saved: ${checked}`);
     } catch (error) {
-      logger.error(
-        "Failed to update launch at startup setting",
-        toErrorPayload(error),
-      );
-      // Revert on error
-      setLaunchAtStartup(!checked);
+      logger.error("Failed to save launch at startup setting", {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
-  };
+  }, []);
 
-  // Handle sensitivity slider change
-  const handleSensitivityChange = async (value: number | number[]) => {
-    if (!electron) return;
-    
-    const newValue = Array.isArray(value) ? value[0] : value;
-    if (newValue === undefined) return;
-    
+  const handleSensitivityChange = useCallback(async (value: number) => {
     try {
-      setSensitivity(newValue);
+      const { electron } = window;
+      if (!electron?.ipcRenderer) {
+        logger.error("IPC renderer not available");
+        return;
+      }
+
+      setSensitivity(value);
       await electron.ipcRenderer.invoke(
         IPC_CHANNELS.setSetting,
         "sensitivity",
-        String(newValue),
+        String(value),
       );
-      logger.info("Sensitivity setting updated", { value: newValue });
+      logger.info(`Sensitivity setting saved: ${value}`);
     } catch (error) {
-      logger.error("Failed to update sensitivity setting", toErrorPayload(error));
+      logger.error("Failed to save sensitivity setting", {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
-  };
+  }, []);
 
-  // Handle re-calibrate button click
-  const handleReCalibrate = async () => {
-    if (!electron) return;
-    
+  const handleReCalibrate = useCallback(async () => {
     try {
-      logger.info("Re-calibration requested");
+      const { electron } = window;
+      if (!electron?.ipcRenderer) {
+        logger.error("IPC renderer not available");
+        return;
+      }
+
+      logger.info("Requesting re-calibration");
       await electron.ipcRenderer.invoke(IPC_CHANNELS.reCalibrate);
     } catch (error) {
-      logger.error("Failed to trigger re-calibration", toErrorPayload(error));
+      logger.error("Failed to trigger re-calibration", {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
-  };
-
-  if (!electron) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
-        <Card className="w-full max-w-md">
-          <CardBody className="py-8 text-center">
-            <p className="text-red-600">Electron API not available</p>
-          </CardBody>
-        </Card>
-      </div>
-    );
-  }
+  }, []);
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
-        <Card className="w-full max-w-md">
-          <CardBody className="py-8 text-center">
-            <p className="text-slate-600">Loading settings...</p>
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-amber-300 via-rose-500 to-indigo-700">
+        <Card className="w-full max-w-md bg-white/10 backdrop-blur">
+          <CardBody className="text-center text-white">
+            <p>{t("settings.loading", "Loading settings...")}</p>
           </CardBody>
         </Card>
       </div>
@@ -194,96 +139,86 @@ export function Settings() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8">
-      <div className="mx-auto w-full max-w-2xl">
-        <Card className="shadow-lg">
-          <CardHeader className="flex flex-col gap-2 border-b border-slate-200 bg-white px-6 py-4">
-            <h1 className="text-2xl font-semibold text-slate-800">
-              {t("settings.title", "Settings")}
-            </h1>
-            <p className="text-sm text-slate-600">
-              {t(
-                "settings.description",
-                "Configure your application preferences",
-              )}
-            </p>
-          </CardHeader>
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-amber-300 via-rose-500 to-indigo-700 px-4 py-12">
+      <Card className="w-full max-w-md bg-white/10 backdrop-blur">
+        <CardHeader className="flex flex-col gap-2">
+          <h1 className="text-2xl font-semibold text-white">
+            {t("settings.title", "Settings")}
+          </h1>
+          <p className="text-sm text-white/70">
+            {t("settings.description", "Configure your Posely preferences")}
+          </p>
+        </CardHeader>
+        <CardBody className="flex flex-col gap-6">
+          <div className="flex flex-col gap-4">
+            <Checkbox
+              isSelected={launchAtStartup}
+              onValueChange={(checked) => {
+                handleLaunchAtStartupChange(checked).catch((err) => {
+                  logger.error("Error in launch at startup handler", {
+                    error: err,
+                  });
+                });
+              }}
+              classNames={{
+                label: "text-white",
+              }}
+            >
+              {t("settings.launchAtStartup", "Launch at startup")}
+            </Checkbox>
 
-          <CardBody className="space-y-6 bg-white px-6 py-6">
-            {/* Launch at Startup */}
-            <div className="space-y-2">
-              <Checkbox
-                isSelected={launchAtStartup}
-                onValueChange={handleLaunchAtStartupChange}
-                classNames={{
-                  label: "text-slate-700 font-medium",
-                }}
-              >
-                {t("settings.launchAtStartup", "Launch at startup")}
-              </Checkbox>
-              <p className="pl-7 text-sm text-slate-500">
-                {t(
-                  "settings.launchAtStartupDescription",
-                  "Automatically start the application when you log in",
-                )}
-              </p>
-            </div>
-
-            {/* Sensitivity Slider */}
-            <div className="space-y-3">
-              <label className="block text-sm font-medium text-slate-700">
+            <div className="flex flex-col gap-2">
+              <span className="text-sm text-white">
                 {t("settings.sensitivity", "Sensitivity")}
-              </label>
+              </span>
               <Slider
-                size="sm"
-                step={1}
+                value={sensitivity}
+                onChange={(value) => {
+                  if (typeof value === "number") {
+                    handleSensitivityChange(value).catch((err) => {
+                      logger.error("Error in sensitivity handler", {
+                        error: err,
+                      });
+                    });
+                  }
+                }}
                 minValue={0}
                 maxValue={100}
-                value={sensitivity}
-                onChange={handleSensitivityChange}
-                className="max-w-full"
+                step={1}
                 classNames={{
-                  track: "bg-slate-200",
-                  filler: "bg-blue-500",
-                  thumb: "bg-white border-2 border-blue-500",
+                  track: "bg-white/20",
+                  filler: "bg-primary",
+                  thumb: "bg-white",
+                  label: "text-white",
+                  value: "text-white",
+                }}
+                showTooltip
+                getValue={(value) => {
+                  if (typeof value === "number") {
+                    return `${value}`;
+                  }
+                  return String(value);
                 }}
               />
-              <div className="flex justify-between text-xs text-slate-500">
-                <span>{t("settings.sensitivityLow", "Low")}</span>
-                <span className="font-medium text-slate-700">{sensitivity}</span>
-                <span>{t("settings.sensitivityHigh", "High")}</span>
-              </div>
-              <p className="text-sm text-slate-500">
-                {t(
-                  "settings.sensitivityDescription",
-                  "Adjust how sensitive the posture detection should be",
-                )}
-              </p>
             </div>
-
-            {/* Re-calibrate Button */}
-            <div className="space-y-3 border-t border-slate-200 pt-6">
-              <h3 className="text-sm font-medium text-slate-700">
-                {t("settings.calibration", "Calibration")}
-              </h3>
-              <p className="text-sm text-slate-500">
-                {t(
-                  "settings.calibrationDescription",
-                  "Re-calibrate your posture baseline if you've changed your desk setup",
-                )}
-              </p>
-              <Button
-                color="primary"
-                variant="flat"
-                onPress={handleReCalibrate}
-                className="mt-2"
-              >
-                {t("settings.reCalibrate", "Re-calibrate Posture")}
-              </Button>
-            </div>
-          </CardBody>
-        </Card>
-      </div>
+          </div>
+        </CardBody>
+        <CardFooter className="flex justify-between">
+          <Button
+            color="primary"
+            variant="bordered"
+            onPress={() => {
+              handleReCalibrate().catch((err) => {
+                logger.error("Error in re-calibrate handler", { error: err });
+              });
+            }}
+          >
+            {t("settings.reCalibrate", "Re-calibrate Posture")}
+          </Button>
+        </CardFooter>
+      </Card>
     </div>
   );
 }
+
+export default Settings;
