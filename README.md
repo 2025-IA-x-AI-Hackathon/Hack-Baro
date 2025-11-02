@@ -14,21 +14,18 @@ Posely는 온디바이스(on-device) 환경에서 전적으로 사용자 개인�
 ## 🚀 빠른 시작 (Quick Start)
 
 ### 필수 조건
-- Node.js ≥ 18
-- pnpm ≥ 8 (`npm install -g pnpm`)
+- Node.js ≥ 22
+- pnpm ≥ 10 (`npm install -g pnpm`)
 - Git
 
 ### 설치 및 실행 단계
 1. 저장소를 클론하고 의존성을 설치합니다:
 
 ```
-git clone https://github.com/2025-IA-x-AI-Hackathon/Hack-Baro/baro.git
+git clone https://github.com/2025-IA-x-AI-Hackathon/Hack-Baro.git
 cd baro
 pnpm install 
 ```
-
-> 💡 팁: 로컬 개발 시 `BARO_SKIP_ELECTRON_BUILDER=1`을 설정하여 네이티브 리빌드를 건너뛸 수 있습니다.
-예시: `pnpm run desktop:install:dev`
 
 2. `.env.example`을 복사해 `.env` 파일을 생성하고(루트 및 필요 시 `apps/desktop/` 내부에도 생성) 다음 값을 채웁니다:
 
