@@ -23,8 +23,11 @@ Posely는 온디바이스(on-device) 환경에서 전적으로 사용자 개인�
 
 ```
 git clone https://github.com/2025-IA-x-AI-Hackathon/Hack-Baro.git
-cd baro
-pnpm install 
+cd Hack-Baro
+pnpm install
+# better-sqlite3 재설치
+pnpm --filter @baro/desktop exec electron-rebuild --force --only better-sqlite3
+
 ```
 
 2. `.env.example`을 복사해 `.env` 파일을 생성하고(루트 및 필요 시 `apps/desktop/` 내부에도 생성) 다음 값을 채웁니다:
