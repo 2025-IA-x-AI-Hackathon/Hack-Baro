@@ -5,8 +5,8 @@
     "getStarted": "Get Started"
   },
   "app": {
-    "tagline": "Electron-React-Boilerplate is now integrated into the Turborepo workspace. Use the actions below to verify IPC and worker communication.",
-    "title": "Posely Desktop"
+    "title": "Posely",
+    "description": "Prevent tech neck and reduce neck strain to boost productivity."
   },
   "cards": {
     "documentation": {

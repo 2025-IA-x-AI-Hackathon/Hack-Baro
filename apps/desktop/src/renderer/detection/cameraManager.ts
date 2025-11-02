@@ -150,6 +150,10 @@ export class CameraManager {
     return this.videoElement;
   }
 
+  getStream(): MediaStream | null {
+    return this.stream;
+  }
+
   dispose(): void {
     if (this.videoElement) {
       this.videoElement.pause();

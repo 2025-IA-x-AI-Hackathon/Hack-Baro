@@ -21,7 +21,7 @@ export type EngineOutputBuilderOptions = {
   neutralScore?: number;
 };
 
-const DEFAULT_NEUTRAL_SCORE = 70;
+const DEFAULT_NEUTRAL_SCORE = 35;
 
 const normaliseScore = (value: number | null | undefined): number | null => {
   if (!Number.isFinite(value)) {

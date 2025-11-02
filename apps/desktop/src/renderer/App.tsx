@@ -9,7 +9,7 @@ import {
   Link,
   Switch,
 } from "@heroui/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HashRouter, Route, Routes } from "react-router-dom";
 import icon from "../../assets/icon.svg";
@@ -32,6 +32,7 @@ import type {
 import type { DetectorKind } from "../shared/types/detector";
 import type { EngineTickPayload } from "../shared/types/engine-ipc";
 import type { EngineTick } from "../shared/types/engine-output";
+import type { CombinedLandmarks } from "../shared/types/landmarks";
 import { useCameraPermission } from "./camera/useCameraPermission";
 import ExampleHeroUI from "./components/ExampleHeroUI";
 import { LanguageSwitcher } from "./components/LanguageSwitcher";
@@ -122,6 +123,280 @@ const formatSensitivityLabel = (value: CalibrationSensitivity): string => {
   return value.charAt(0).toUpperCase() + value.slice(1);
 };
 
+const ZONE_BORDER_CLASS: Record<EngineTick["zone"], string> = {
+  GREEN: "border-emerald-400",
+  YELLOW: "border-amber-400",
+  RED: "border-rose-500",
+};
+
+const ZONE_TEXT_CLASS: Record<EngineTick["zone"], string> = {
+  GREEN: "text-emerald-300",
+  YELLOW: "text-amber-300",
+  RED: "text-rose-300",
+};
+
+const DEFAULT_CAMERA_DIMENSIONS = { width: 640, height: 480 } as const;
+const CAMERA_FACE_COLOR = "rgba(0, 200, 255, 0.85)";
+const CAMERA_POSE_COLOR = "rgba(0, 255, 120, 0.9)";
+const CAMERA_SHOULDER_COLOR = "rgba(255, 200, 70, 0.95)";
+
+type CameraPreviewCardProps = {
+  stream: MediaStream | null;
+  zone: EngineTick["zone"] | null | undefined;
+  score: number | null | undefined;
+  detectionEnabled: boolean;
+  landmarks: CombinedLandmarks | null;
+};
+
+function CameraPreviewCard({
+  stream,
+  zone,
+  score,
+  detectionEnabled,
+  landmarks,
+}: CameraPreviewCardProps) {
+  const [showLandmarks, setShowLandmarks] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [videoDimensions, setVideoDimensions] = useState<{
+    width: number;
+    height: number;
+  }>(() => ({
+    ...DEFAULT_CAMERA_DIMENSIONS,
+  }));
+
+  const videoAvailable = detectionEnabled && Boolean(stream);
+
+  useEffect(() => {
+    if (!videoAvailable && showLandmarks) {
+      setShowLandmarks(false);
+    }
+  }, [videoAvailable, showLandmarks]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+
+    if (videoAvailable && stream) {
+      if (video.srcObject !== stream) {
+        video.srcObject = stream;
+      }
+      const playPromise = video.play();
+      if (playPromise) {
+        playPromise.catch((error) => {
+          logger.warn("Camera preview failed to autoplay", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
+    } else if (video.srcObject) {
+      video.pause();
+      video.srcObject = null;
+    }
+
+    return () => {
+      if (!videoAvailable && video.srcObject) {
+        video.pause();
+        video.srcObject = null;
+      }
+    };
+  }, [videoAvailable, stream]);
+
+  useEffect(() => {
+    if (!videoAvailable) {
+      setVideoDimensions((current) => {
+        if (
+          current.width === DEFAULT_CAMERA_DIMENSIONS.width &&
+          current.height === DEFAULT_CAMERA_DIMENSIONS.height
+        ) {
+          return current;
+        }
+        return { ...DEFAULT_CAMERA_DIMENSIONS };
+      });
+      return;
+    }
+
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+
+    const updateDimensions = () => {
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        setVideoDimensions({
+          width: video.videoWidth,
+          height: video.videoHeight,
+        });
+      }
+    };
+
+    updateDimensions();
+
+    video.addEventListener("loadedmetadata", updateDimensions);
+    return () => {
+      video.removeEventListener("loadedmetadata", updateDimensions);
+    };
+  }, [videoAvailable, stream]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return;
+    }
+
+    const { width, height } = videoDimensions;
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+
+    context.clearRect(0, 0, width, height);
+
+    if (!showLandmarks || !videoAvailable || !landmarks) {
+      return;
+    }
+
+    const drawPoint = (x: number, y: number, color: string, size: number) => {
+      context.beginPath();
+      context.fillStyle = color;
+      context.arc(x, y, size, 0, 2 * Math.PI);
+      context.fill();
+    };
+
+    const faceLandmarks = landmarks.face?.landmarks ?? [];
+    faceLandmarks.forEach((landmark) => {
+      if (Number.isFinite(landmark.x) && Number.isFinite(landmark.y)) {
+        drawPoint(
+          landmark.x * width,
+          landmark.y * height,
+          CAMERA_FACE_COLOR,
+          2.5,
+        );
+      }
+    });
+
+    const poseLandmarks = landmarks.pose?.landmarks ?? [];
+    poseLandmarks.forEach((landmark, index) => {
+      if (Number.isFinite(landmark.x) && Number.isFinite(landmark.y)) {
+        const highlight = index === 0 || index === 11 || index === 12;
+        drawPoint(
+          landmark.x * width,
+          landmark.y * height,
+          highlight ? CAMERA_SHOULDER_COLOR : CAMERA_POSE_COLOR,
+          highlight ? 4 : 3,
+        );
+      }
+    });
+  }, [landmarks, showLandmarks, videoAvailable, videoDimensions]);
+
+  const zoneBorderClass = useMemo(() => {
+    if (zone) {
+      return ZONE_BORDER_CLASS[zone] ?? "border-white/20";
+    }
+    return "border-white/20";
+  }, [zone]);
+
+  const zoneTextClass = useMemo(() => {
+    if (zone) {
+      return ZONE_TEXT_CLASS[zone] ?? "text-white/70";
+    }
+    return "text-white/70";
+  }, [zone]);
+
+  const zoneLabel = zone ?? "Waiting for score";
+  const formattedScore =
+    typeof score === "number" && Number.isFinite(score)
+      ? formatWithPrecision(score, 1)
+      : "—";
+
+  const aspectRatio = useMemo(() => {
+    if (!videoAvailable) {
+      return 4 / 3;
+    }
+    const ratio = videoDimensions.width / videoDimensions.height;
+    if (!Number.isFinite(ratio) || ratio <= 0) {
+      return 4 / 3;
+    }
+    return ratio;
+  }, [videoAvailable, videoDimensions]);
+
+  const overlayVisible = showLandmarks && videoAvailable;
+
+  return (
+    <Card className="w-full max-w-xl flex-1 bg-black/40 text-left text-white/80 backdrop-blur-xl">
+      <CardHeader className="flex flex-col gap-2 text-white">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold">Camera Preview</h2>
+            <p className="text-sm text-white/70">
+              Confirm your camera and tracking are active.
+            </p>
+          </div>
+          <Switch
+            isSelected={showLandmarks}
+            size="sm"
+            isDisabled={!videoAvailable}
+            onValueChange={setShowLandmarks}
+            className="shrink-0"
+          >
+            Show landmarks
+          </Switch>
+        </div>
+      </CardHeader>
+      <CardBody className="space-y-4 text-sm text-white/80">
+        <div
+          className={`relative w-full overflow-hidden rounded-xl border-2 ${zoneBorderClass} bg-black/80`}
+          style={{ maxWidth: "480px", aspectRatio }}
+        >
+          {videoAvailable ? (
+            <>
+              <video
+                ref={videoRef}
+                muted
+                playsInline
+                autoPlay
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+              <canvas
+                ref={canvasRef}
+                className={`pointer-events-none absolute inset-0 h-full w-full ${overlayVisible ? "opacity-100" : "opacity-0"} transition-opacity duration-150`}
+              />
+            </>
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-white/70">
+              {detectionEnabled
+                ? "Connecting to camera…"
+                : "Camera permission required to show preview."}
+            </div>
+          )}
+        </div>
+        <div className="grid gap-2 text-xs text-white/70">
+          <div className="flex items-center justify-between">
+            <span>Current zone</span>
+            <span className={`font-semibold ${zoneTextClass}`}>
+              {zoneLabel}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span>Score</span>
+            <span className="font-semibold text-white">{formattedScore}</span>
+          </div>
+        </div>
+        <p className="text-xs text-white/60">
+          The border reflects your live posture zone. Enable landmarks to view
+          the points the model is tracking.
+        </p>
+      </CardBody>
+    </Card>
+  );
+}
+
 function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
   const { t } = useTranslation(["common"]);
   const preferredDetector =
@@ -135,6 +410,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
   const detectionMetrics = detection.metrics;
   const detectionDebug = detection.debug;
   const detectionLandmarks = detection.landmarks;
+  const detectionCameraStream = detection.cameraStream;
   const { setCameraPreviewVisible } = detection;
   const {
     performanceConfig,
@@ -323,7 +599,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
       workerResponse: t("status.workerResponse"),
       engineTick: t("status.engineTick"),
       title: t("app.title"),
-      tagline: t("app.tagline"),
+      description: t("app.description"),
       pingMain: t("actions.pingMain"),
       pingWorker: t("actions.pingWorker"),
       documentationTitle: t("cards.documentation.title"),
@@ -803,25 +1079,9 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
               <h1 className="text-3xl font-semibold text-white md:text-4xl">
                 {defaults.title}
               </h1>
-              <p className="mt-2 max-w-2xl text-base text-white/85 md:text-lg">
-                {defaults.tagline}
-              </p>
             </div>
           </div>
           <LanguageSwitcher />
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <Button color="primary" size="lg" onPress={sendPing}>
-            {defaults.pingMain}
-          </Button>
-          <Button
-            color="secondary"
-            size="lg"
-            variant="bordered"
-            onPress={pingWorker}
-          >
-            {defaults.pingWorker}
-          </Button>
         </div>
       </header>
 
@@ -873,8 +1133,8 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
       </section>
 
       {onboardingComplete ? (
-        <section className="flex justify-center">
-          <Card className="w-full max-w-3xl bg-black/40 text-left backdrop-blur-xl">
+        <section className="flex flex-col gap-6 xl:flex-row xl:items-start">
+          <Card className="w-full max-w-3xl flex-1 bg-black/40 text-left backdrop-blur-xl">
             <CardHeader className="flex flex-col gap-2 text-white">
               <h2 className="text-lg font-semibold">
                 Calibration &amp; Sensitivity
@@ -1120,6 +1380,13 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
               ) : null}
             </CardFooter>
           </Card>
+          <CameraPreviewCard
+            stream={detectionCameraStream}
+            zone={engineTick?.zone}
+            score={engineTick?.score}
+            detectionEnabled={detectionEnabled}
+            landmarks={detectionLandmarks}
+          />
         </section>
       ) : null}
 
@@ -1168,47 +1435,6 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
       </section>
 
       <section className="grid gap-4 md:grid-cols-4 xl:grid-cols-5">
-        <Card className="bg-black/30 text-left backdrop-blur-lg">
-          <CardHeader className="flex flex-col gap-1 text-white">
-            <span className="text-sm uppercase tracking-wide text-white/60">
-              {defaults.mainProcess}
-            </span>
-            <h2 className="text-lg font-semibold text-white">Main Process</h2>
-          </CardHeader>
-          <CardBody>
-            <Code className="whitespace-pre-wrap break-words text-sm">
-              {mainResponse.value}
-            </Code>
-          </CardBody>
-        </Card>
-        <Card className="bg-black/30 text-left backdrop-blur-lg">
-          <CardHeader className="flex flex-col gap-1 text-white">
-            <span className="text-sm uppercase tracking-wide text-white/60">
-              {defaults.workerStatus}
-            </span>
-            <h2 className="text-lg font-semibold text-white">Worker Status</h2>
-          </CardHeader>
-          <CardBody>
-            <Code className="whitespace-pre-wrap break-words text-sm">
-              {workerStatus.value}
-            </Code>
-          </CardBody>
-        </Card>
-        <Card className="bg-black/30 text-left backdrop-blur-lg">
-          <CardHeader className="flex flex-col gap-1 text-white">
-            <span className="text-sm uppercase tracking-wide text-white/60">
-              {defaults.workerResponse}
-            </span>
-            <h2 className="text-lg font-semibold text-white">
-              Worker Response
-            </h2>
-          </CardHeader>
-          <CardBody>
-            <Code className="whitespace-pre-wrap break-words text-sm">
-              {workerResponse.value}
-            </Code>
-          </CardBody>
-        </Card>
         <Card className="bg-black/30 text-left backdrop-blur-lg">
           <CardHeader className="flex flex-col gap-1 text-white">
             <span className="text-sm uppercase tracking-wide text-white/60">
@@ -1522,155 +1748,17 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
         </Card>
       </section>
 
-      <ExampleHeroUI
+      {/* <ExampleHeroUI
         engineTick={engineTick}
         onPingMain={sendPing}
         onPingWorker={pingWorker}
-      />
+      /> */}
 
       <DetectionDebugHud
         state={detectionDebug ?? null}
         visible={showDebugHud}
         overlay={cameraPreviewToggle && detectionEnabled}
       />
-
-      <section className="grid gap-4 md:grid-cols-2">
-        <Card className="bg-white/10 text-left backdrop-blur">
-          <CardHeader className="flex items-start justify-between gap-4">
-            <h3 className="text-xl font-semibold text-white">
-              {defaults.documentationTitle}
-            </h3>
-            <Link
-              color="primary"
-              href="https://electron-react-boilerplate.js.org/"
-              isExternal
-              underline="always"
-            >
-              Docs
-            </Link>
-          </CardHeader>
-          <CardBody className="text-sm text-white/80">
-            {defaults.documentationBody}
-          </CardBody>
-          <CardFooter className="text-xs text-white/60">
-            Explore Electron React Boilerplate resources.
-          </CardFooter>
-        </Card>
-        <Card className="bg-white/10 text-left backdrop-blur">
-          <CardHeader className="flex items-start justify-between gap-4">
-            <h3 className="text-xl font-semibold text-white">
-              {defaults.turborepoTitle}
-            </h3>
-            <Link
-              color="primary"
-              href="https://turborepo.org/docs"
-              isExternal
-              underline="always"
-            >
-              Turborepo
-            </Link>
-          </CardHeader>
-          <CardBody className="text-sm text-white/80">
-            {defaults.turborepoBody}
-          </CardBody>
-          <CardFooter className="text-xs text-white/60">
-            Learn how Turborepo powers the build pipeline.
-          </CardFooter>
-        </Card>
-      </section>
-
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-bold">
-            {t("cards.documentation.title")}
-          </h2>
-        </CardHeader>
-        <CardBody>
-          <p>{defaults.documentationBody}</p>
-        </CardBody>
-        <CardFooter>
-          <Link
-            href="https://www.electronjs.org/docs/latest/"
-            target="_blank"
-            aria-label="Electron"
-          >
-            {t("actions.getStarted")}
-          </Link>
-        </CardFooter>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-bold">
-            {t("cards.errorMonitoring.title", "Error Monitoring (Live Sentry)")}
-          </h2>
-        </CardHeader>
-        <CardBody>
-          <p>
-            {t(
-              "cards.errorMonitoring.body",
-              "These actions raise real errors using your configured Sentry project. Use them to validate instrumentation across processes and clear the events afterwards.",
-            )}
-          </p>
-        </CardBody>
-        <CardFooter className="flex justify-end space-x-2">
-          <Button
-            color="danger"
-            onPress={() => {
-              throw new Error("Intentional Renderer Error");
-            }}
-          >
-            {t("actions.triggerRendererError", "Trigger Renderer Error")}
-          </Button>
-          <Button
-            color="danger"
-            onPress={() => {
-              ipcRenderer
-                .invoke(channels.triggerMainError as RendererChannel)
-                .catch((error: unknown) => {
-                  logger.error(
-                    "Failed to trigger main process error from renderer",
-                    {
-                      error:
-                        error instanceof Error ? error.message : String(error),
-                      stack: error instanceof Error ? error.stack : undefined,
-                    },
-                  );
-                });
-            }}
-          >
-            {t("actions.triggerMainError", "Trigger Main Error")}
-          </Button>
-          <Button
-            color="danger"
-            onPress={() =>
-              ipcRenderer.sendMessage(
-                channels.triggerWorkerError as RendererChannel,
-              )
-            }
-          >
-            {t("actions.triggerWorkerError", "Trigger Worker Error")}
-          </Button>
-        </CardFooter>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-bold">{defaults.turborepoTitle}</h2>
-        </CardHeader>
-        <CardBody>
-          <p>{defaults.turborepoBody}</p>
-        </CardBody>
-        <CardFooter>
-          <Link
-            href="https://turborepo.org/docs"
-            target="_blank"
-            aria-label="Turborepo"
-          >
-            {t("actions.getStarted")}
-          </Link>
-        </CardFooter>
-      </Card>
     </div>
   );
 }

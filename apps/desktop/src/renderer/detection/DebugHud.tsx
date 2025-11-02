@@ -1,10 +1,17 @@
+import { cn } from "@heroui/theme";
 import { memo, useEffect, useMemo, useRef } from "react";
 import type { DetectionDebugState } from "./detectionPipeline";
+
+interface ClassNames {
+  container?: string;
+  canvas?: string;
+}
 
 type DebugHudProps = {
   state: DetectionDebugState | null;
   visible: boolean;
   overlay: boolean;
+  classNames?: ClassNames;
 };
 
 const CANVAS_WIDTH = 320;
@@ -45,6 +52,7 @@ function DetectionDebugHudComponent({
   state,
   visible,
   overlay = false,
+  classNames,
 }: DebugHudProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -132,12 +140,12 @@ function DetectionDebugHudComponent({
     : "mb-3 h-auto w-full rounded-md border border-white/10 bg-[rgba(8,12,20,0.8)]";
 
   return (
-    <div className={containerClasses}>
+    <div className={cn(containerClasses, classNames?.container)}>
       <canvas
         ref={canvasRef}
         width={CANVAS_WIDTH}
         height={CANVAS_HEIGHT}
-        className={canvasClasses}
+        className={cn(canvasClasses, classNames?.canvas)}
         style={
           overlay ? { boxShadow: "0 0 0 2px rgba(255,255,255,0.5)" } : undefined
         }
