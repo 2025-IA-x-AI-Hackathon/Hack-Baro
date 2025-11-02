@@ -4,6 +4,17 @@ import type { ElectronApplication, Page } from "@playwright/test";
 import path from "path";
 // eslint-disable-next-line import/no-unresolved, import/extensions
 import { IPC_CHANNELS } from "../src/shared/ipcChannels";
+import type { CalibrationCompletePayload } from "../src/shared/types/calibration";
+
+type E2ETestGlobal = typeof globalThis & {
+  e2eLatestBaseline?: CalibrationCompletePayload;
+};
+
+declare global {
+  // Playwright e2e tests store the latest baseline on the Electron global.
+  // Declaring it here keeps TypeScript aware of the test-only hook.
+  let e2eLatestBaseline: CalibrationCompletePayload | undefined;
+}
 
 let electronApp: ElectronApplication;
 let calibrationWindow: Page;
