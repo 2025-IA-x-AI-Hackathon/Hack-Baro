@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { HeroUIProvider } from "@heroui/react";
-import { Dashboard } from "../Dashboard";
+import Dashboard from "../Dashboard";
 
 // Mock window.electron
 const mockInvoke = vi.fn();
