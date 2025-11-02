@@ -13,6 +13,16 @@
       "body": "Review the base project documentation that powers this desktop app.",
       "title": "Electron React Boilerplate"
     },
+    "camera": {
+      "title": "Camera Preview",
+      "description": "Confirm your camera and tracking are active.",
+      "showLandmarks": "Show Landmarks",
+      "currentZone": "Current Status",
+      "connecting": "Connecting to camera…",
+      "noPermission": "No camera permission granted.",
+      "score": "Posture Score",
+      "scoreDescription": "The border reflects your live posture zone. Enable landmarks to view the points the model is tracking."
+    },
     "turborepo": {
       "body": "Desktop build, dev, and test scripts run through the shared Turbo pipeline.",
       "title": "Turborepo Pipelines"
@@ -56,12 +66,14 @@
   "notifications": {
     "titles": {
       "red": "Posture Alert",
-      "yellow": "Posture Reminder"
+      "yellow": "Posture Reminder",
+      "break": "Time for a Reset"
     },
     "body": {
-      "red": "You have stayed in the red zone for {{duration}}. Adjust your posture to reduce strain.",
-      "yellowFromGreen": "Your posture moved from green to yellow and has stayed there for {{duration}}. Take a moment to reset.",
-      "yellow": "You have been in the yellow zone for {{duration}}. Straighten up to return to green."
+      "red": "You have stayed in the \"Bad\" zone for {{duration}}. Adjust your posture to reduce strain.",
+      "yellowFromGreen": "Your posture moved from \"Good\" to \"So-So\" and has stayed there for {{duration}}. Take a moment to reset.",
+      "yellow": "You have been in the \"So-So\" zone for {{duration}}. Straighten up to return to green.",
+      "break": "Great work maintaining posture for {{duration}}. Take a short break to stay refreshed."
     },
     "duration": {
       "single": "{{minutes}} minute",

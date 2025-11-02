@@ -13,6 +13,16 @@
       "body": "이 데스크톱 앱을 구성하는 기본 프로젝트 문서를 확인하세요.",
       "title": "Electron React Boilerplate"
     },
+    "camera": {
+      "title": "카메라 미리보기",
+      "description": "카메라와 추적이 활성화되었는지 확인하세요.",
+      "showLandmarks": "랜드마크 표시",
+      "currentZone": "현재 상태",
+      "connecting": "카메라에 연결 중…",
+      "noPermission": "카메라 권한이 부여되지 않았습니다.",
+      "score": "자세 점수",
+      "scoreDescription": "테두리는 실시간 자세 구간을 반영합니다. 모델이 추적하는 포인트를 보려면 랜드마크를 활성화하세요."
+    },
     "turborepo": {
       "body": "데스크톱 빌드, 개발, 테스트 스크립트는 공유 Turbo 파이프라인을 통해 실행됩니다.",
       "title": "Turborepo 파이프라인"
@@ -51,6 +61,23 @@
       "openSettings": "시스템 설정 열기",
       "privacySecurityCamera": "개인정보 보호 및 보안 → 카메라로 이동",
       "togglePosely": "포슬리 항목을 허용"
+    }
+  },
+  "notifications": {
+    "titles": {
+      "red": "자세 경고",
+      "yellow": "자세 알림",
+      "break": "잠깐 쉬어가요"
+    },
+    "body": {
+      "red": "{{duration}} 동안 \"나쁨\" 구간이 지속되고 있습니다. 긴장을 풀고 자세를 바로잡아 주세요.",
+      "yellowFromGreen": "\"좋음\" 구간에서 \"보통\" 구간으로 이동한 뒤 {{duration}} 동안 유지되었어요. 잠깐 자세를 재정비해 주세요.",
+      "yellow": "{{duration}} 동안 \"보통\" 구간이 유지되고 있습니다. 자세를 바로잡아 \"좋음\" 구간으로 돌아가 볼까요?",
+      "break": "{{duration}} 동안 바른 자세를 유지했어요. 잠시 일어나 스트레칭하거나 물 한 잔 하세요."
+    },
+    "duration": {
+      "single": "{{minutes}}분",
+      "plural": "{{minutes}}분"
     }
   },
   "onboarding": {
