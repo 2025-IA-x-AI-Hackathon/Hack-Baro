@@ -23,7 +23,7 @@ test("Onboarding - Deny Path", async () => {
   await electronApp.evaluate(({ ipcMain }, channel) => {
     ipcMain.removeHandler(channel);
     ipcMain.handle(channel, () => ({ granted: false }));
-  }, IPC_CHANNELS.REQUEST_CAMERA_PERMISSION);
+  }, IPC_CHANNELS.requestCameraPermission);
 
   await expect(
     window.locator('h1:has-text("Let\'s set up your posture coach")'),
@@ -48,7 +48,7 @@ test("Onboarding - Allow Path", async () => {
   await electronApp.evaluate(({ ipcMain }, channel) => {
     ipcMain.removeHandler(channel);
     ipcMain.handle(channel, () => ({ granted: true }));
-  }, IPC_CHANNELS.REQUEST_CAMERA_PERMISSION);
+  }, IPC_CHANNELS.requestCameraPermission);
 
   await expect(
     window.locator('h1:has-text("Let\'s set up your posture coach")'),
