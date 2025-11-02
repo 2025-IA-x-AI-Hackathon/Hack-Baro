@@ -128,4 +128,4 @@ OS별 릴리스 워크플로우에는 패키징 단계가 추가됩니다.
 
 ## 📚 문서 (Documentation)
 
-`apps/desktop/INTEGRATION.md` – Electron React Boilerplate 통합 기록 및 업그레이드 가이드
+- [apps/desktop/INTEGRATION.md](apps/desktop/INTEGRATION.md) – Electron React Boilerplate 통합 기록 및 업그레이드 가이드
