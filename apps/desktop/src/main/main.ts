@@ -10,7 +10,7 @@ import dotenv from "dotenv";
 import dotenvExpand from "dotenv-expand";
 import {
   BrowserWindow,
-  Menu as ElectronMenu,
+  Menu,
   Tray,
   app,
   ipcMain,
@@ -24,6 +24,7 @@ import fs from "fs";
 import { Worker } from "node:worker_threads";
 import os from "os";
 import path from "path";
+import { deriveThresholds } from "../shared/calibration/sensitivity-presets";
 import { parseBooleanFlag } from "../shared/env";
 import buildGuardrailOverridesFromRecord from "../shared/guardrails/overrides";
 import {
@@ -33,43 +34,513 @@ import {
 } from "../shared/ipcChannels";
 import { getLogger, toErrorPayload } from "../shared/logger";
 import type {
+  CalibrationCompletePayload,
+  CalibrationCustomThresholds,
+  CalibrationFailure,
+  CalibrationProgress,
+  CalibrationSensitivityUpdateRequest,
+  CalibrationSessionResult,
+  CalibrationStartRequest,
+  PostureCalibrationRecord,
+} from "../shared/types/calibration";
+import type { EngineTick } from "../shared/types/engine";
+import type {
   EngineFramePayload,
   EngineTickPayload,
 } from "../shared/types/engine-ipc";
 import type { MetricValues } from "../shared/types/metrics";
 import { isMetricValues, isRecord } from "../shared/validation/metricValues";
-// TODO: check whether `openCameraPrivacySettings` is overlapping with cameraPermissions.ts
 import {
   openCameraSettings,
   requestCameraPermission,
 } from "./cameraPermissions";
-import { initializeDatabase } from "./database/client";
 import {
-  getDailyPostureLogByDate,
-  upsertDailyPostureLog,
+  startDashboardHttpServer,
+  stopDashboardHttpServer,
+} from "./dashboardHttpServer";
+import {
+  getActivePostureCalibration,
+  markPostureCalibrationActive,
+  savePostureCalibration,
+  updatePostureCalibrationSensitivity,
+} from "./database/calibrationRepository";
+import {
+  calculateStreak,
+  getTodaySummary,
   getWeeklySummary,
 } from "./database/dailyPostureRepository";
 import { getSetting, setSetting } from "./database/settingsRepository";
+import { createRendererTickHandler } from "./engineTickBridge";
 import registerCalibrationHandler from "./ipc/calibrationHandler";
 import MenuBuilder from "./menu";
+import {
+  processEngineTick,
+  startPostureDataAggregator,
+  stopPostureDataAggregator,
+} from "./postureDataAggregator";
 import { captureException } from "./sentry";
 import { resolveHtmlPath } from "./util";
-import { createDashboardWindow } from "./windows/dashboardWindow";
-import {
-  closeSettingsWindow,
-  createSettingsWindow,
-} from "./windows/settingsWindow";
+
+// E2E Testing: Type definitions for global test state
+interface TrayIconState {
+  lastIconPath: string;
+  lastTooltip: string;
+  updateCount: number;
+  lastTick: EngineTick | null;
+}
+
+interface TrayMenuState {
+  menuItemCount: number;
+  separatorCount: number;
+  menuStructure: Array<{
+    label: string;
+    type: string;
+    enabled: boolean;
+  }>;
+}
+
+declare global {
+  // eslint-disable-next-line vars-on-top, no-underscore-dangle
+  var __trayIconState: TrayIconState | undefined;
+  // eslint-disable-next-line vars-on-top, no-underscore-dangle
+  var __trayMenuState: TrayMenuState | undefined;
+}
 
 dotenvExpand.expand(dotenv.config());
 
 let mainWindow: BrowserWindow | null = null;
 let backgroundWorker: Worker | null = null;
 let tray: Tray | null = null;
-let isPaused = false;
+let settingsWindow: BrowserWindow | null = null;
+let isPaused = false; // Story 3.3: Pause/Resume monitoring state
 
 const pendingWorkerMessages: WorkerMessage[] = [];
 const logger = getLogger("main-process", "main");
 
+let latestEngineTick: EngineTick | null = null;
+
+const isDebug =
+  process.env.NODE_ENV === "development" || process.env.DEBUG_PROD === "true";
+
+/**
+ * Path to the assets directory (icons, images, etc.)
+ */
+const RESOURCES_PATH = app.isPackaged
+  ? path.join(process.resourcesPath, "assets")
+  : path.join(__dirname, "../../assets");
+
+/**
+ * Get the full path to an asset file
+ */
+const getAssetPath = (...paths: string[]): string => {
+  return path.join(RESOURCES_PATH, ...paths);
+};
+
+/**
+ * Get neutral score threshold from environment or use default
+ * NOTE: This function is kept for backward compatibility but the simple threshold
+ * mode now uses the same three-color logic as production mode.
+ */
+const getNeutralThreshold = (): number => {
+  const envValue = process.env.POSELY_SCORE_NEUTRAL;
+  if (envValue) {
+    const parsed = parseFloat(envValue);
+    if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 100) {
+      return parsed;
+    }
+  }
+  // Default production thresholds (from Epic 4 Story 8)
+  return 80; // Default value when POSELY_SCORE_NEUTRAL is not configured or invalid
+};
+
+/**
+ * Score thresholds for tray icon colors
+ * - score >= 80 → GREEN (good posture)
+ * - score > 50 and score < 80 → YELLOW (at risk)
+ * - score <= 50 → RED (bad posture)
+ */
+const SCORE_THRESHOLDS = {
+  GREEN: 80,
+  YELLOW: 51, // Yellow shows when score > 50 (so >= 51)
+  RED: 50, // Red shows when score <= 50
+} as const;
+
+/**
+ * Delay after showing/focusing a window before loading new content.
+ * This ensures the window is fully visible and camera permissions are established,
+ * preventing camera initialization failures when transitioning from hidden state.
+ */
+const WINDOW_SHOW_DELAY_MS = 100;
+
+const NEUTRAL_THRESHOLD = getNeutralThreshold();
+const USE_SIMPLE_THRESHOLD = !!process.env.POSELY_SCORE_NEUTRAL;
+
+// Log tray icon configuration at startup
+logger.info("Tray icon configuration", {
+  mode: USE_SIMPLE_THRESHOLD ? "simple (testing)" : "production",
+  neutralThreshold: NEUTRAL_THRESHOLD,
+  envValue: process.env.POSELY_SCORE_NEUTRAL,
+  productionThresholds: SCORE_THRESHOLDS,
+});
+
+/**
+ * Get tray icon path based on EngineTick score
+ * Rules (in priority order):
+ * - IDLE/UNRELIABLE/INITIAL states: gray (neutral, non-alarming)
+ * - Score-based colors for active states (see thresholds above)
+ */
+const getTrayIconPath = (tick: EngineTick): string => {
+  // Handle envelope states (IDLE, UNRELIABLE, INITIAL) with neutral gray
+  // INITIAL is the starting state before any posture data is available
+  const isEnvelopeState =
+    tick.state === "IDLE" ||
+    tick.state === "UNRELIABLE" ||
+    (tick.state as string) === "INITIAL";
+
+  // Debug logging for envelope state check
+  logger.info("getTrayIconPath debug", {
+    state: tick.state,
+    isEnvelopeState,
+    score: tick.score,
+    scoreType: typeof tick.score,
+    neutralThreshold: NEUTRAL_THRESHOLD,
+    useSimpleThreshold: USE_SIMPLE_THRESHOLD,
+    scoreComparison:
+      USE_SIMPLE_THRESHOLD && !isEnvelopeState
+        ? `${tick.score} >= ${NEUTRAL_THRESHOLD} = ${tick.score >= NEUTRAL_THRESHOLD}`
+        : "n/a",
+  });
+
+  if (isEnvelopeState) {
+    return path.join(RESOURCES_PATH, "icons", "tray-gray.png");
+  }
+
+  // Three-color logic: GREEN >= 80, YELLOW 51-79, RED <= 50
+  // Note: USE_SIMPLE_THRESHOLD kept for backward compatibility but uses same logic
+  if (tick.score >= SCORE_THRESHOLDS.GREEN) {
+    return path.join(RESOURCES_PATH, "icons", "tray-green.png");
+  }
+  if (tick.score > SCORE_THRESHOLDS.RED) {
+    // score is between 51-79 (inclusive)
+    return path.join(RESOURCES_PATH, "icons", "tray-yellow.png");
+  }
+  // score <= 50
+  return path.join(RESOURCES_PATH, "icons", "tray-red.png");
+};
+
+/**
+ * Get tooltip text based on EngineTick score and state
+ * Follows non-judgmental microcopy from engine-output-contract.md
+ * Uses score thresholds to determine appropriate message
+ */
+const getTrayTooltip = (tick: EngineTick): string => {
+  // Handle envelope states first
+  if (tick.state === "IDLE") {
+    return "Paused — no one detected";
+  }
+  if (tick.state === "UNRELIABLE") {
+    return "Tracking lost — face camera / improve lighting";
+  }
+  if ((tick.state as string) === "INITIAL") {
+    return "Posely";
+  }
+
+  // Simple two-state messages when using POSELY_SCORE_NEUTRAL (testing mode)
+  if (USE_SIMPLE_THRESHOLD) {
+    if (tick.score >= NEUTRAL_THRESHOLD) {
+      return tick.state === "RECOVERING"
+        ? "Great — keep returning to neutral"
+        : "You're aligned — nice!";
+    }
+    return "Let's sit tall again";
+  }
+
+  // Production three-state messages
+  if (tick.score >= SCORE_THRESHOLDS.GREEN) {
+    // Green zone (score >= 80)
+    return tick.state === "RECOVERING"
+      ? "Great — keep returning to neutral"
+      : "You're aligned — nice!";
+  }
+  if (tick.score >= SCORE_THRESHOLDS.YELLOW) {
+    // Yellow zone (score >= 60)
+    return "Hold steady — almost there";
+  }
+  // Red zone (score < 60)
+  return "Let's sit tall again";
+};
+
+/**
+ * Get status label for tray context menu based on EngineTick
+ */
+const getStatusLabel = (tick: EngineTick | null): string => {
+  if (!tick) {
+    return "Status: Starting…";
+  }
+
+  // Handle envelope states
+  if (tick.state === "IDLE") {
+    return "Status: Paused";
+  }
+  if (tick.state === "UNRELIABLE") {
+    return "Status: Tracking Lost";
+  }
+  if ((tick.state as string) === "INITIAL") {
+    return "Status: Initializing…";
+  }
+
+  // Handle active states based on zone
+  if (tick.zone === "GREEN") {
+    return "Status: Good Posture ✓";
+  }
+  if (tick.zone === "YELLOW") {
+    return "Status: At Risk ⚠";
+  }
+  // RED zone
+  return "Status: Poor Posture ✗";
+};
+
+/**
+ * Update tray context menu with current posture status
+ *
+ * Menu Grouping Philosophy (Story 1.5):
+ * The menu is organized into 4 logical groups separated by visual dividers:
+ *
+ * 1. Status Group: Current posture state (informational only, disabled)
+ *    - Displays dynamic status based on EngineTick state and zone
+ *    - Examples: "Good Posture ✓", "At Risk ⚠", "Poor Posture ✗"
+ *
+ * 2. Application Group: Actions that open windows
+ *    - "Show Desktop" - Opens/focuses the main monitoring window
+ *    - "Show Dashboard" - Opens the analytics dashboard (separate window)
+ *    - "Settings" - Will open settings window (Epic 3)
+ *
+ * 3. Monitoring Group: Controls for detection
+ *    - "Pause Monitoring" / "Resume Monitoring" - Toggles detection on/off (Story 3.3)
+ *
+ * 4. System Group: App-level actions
+ *    - "Quit Posely" - Terminates the application
+ *
+ * Visual hierarchy is created through separators (thin gray lines) that provide
+ * implicit categorization without requiring text labels, maintaining clean minimalism
+ * while improving usability and scannability.
+ */
+const updateTrayMenu = (tick: EngineTick | null) => {
+  if (!tray) {
+    return;
+  }
+
+  const statusLabel = getStatusLabel(tick);
+
+  const contextMenu = Menu.buildFromTemplate([
+    // === STATUS GROUP ===
+    {
+      label: statusLabel,
+      enabled: false,
+    },
+    { type: "separator" }, // Separator after status
+
+    // === APPLICATION GROUP ===
+    {
+      label: "Show Desktop",
+      click: () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.show();
+          mainWindow.focus();
+        } else {
+          // eslint-disable-next-line no-use-before-define
+          createWindow().catch((error: unknown) => {
+            logger.error(
+              "Failed to create main window from tray",
+              toErrorPayload(error),
+            );
+          });
+        }
+      },
+    },
+    {
+      label: "Show Dashboard",
+      click: () => {
+        // eslint-disable-next-line no-use-before-define
+        createDashboardWindow();
+      },
+    },
+    {
+      label: "Settings",
+      click: () => {
+        // eslint-disable-next-line no-use-before-define
+        createSettingsWindow();
+      },
+    },
+    { type: "separator" }, // Separator after application controls
+
+    // === MONITORING GROUP ===
+    {
+      label: isPaused ? "Resume Monitoring" : "Pause Monitoring",
+      enabled: true, // Story 3.3: Pause/Resume functionality now implemented
+      click: () => {
+        // Toggle the paused state
+        isPaused = !isPaused;
+
+        logger.info(`Monitoring ${isPaused ? "paused" : "resumed"}`);
+
+        // Send message to Worker Process to pause/resume
+        if (backgroundWorker) {
+          backgroundWorker.postMessage({
+            type: WORKER_MESSAGES.setPaused,
+            payload: isPaused,
+          });
+        }
+
+        // Update tray icon to reflect paused state
+        if (isPaused) {
+          const pausedIconPath = getAssetPath("icons", "tray-gray.png");
+          const pausedImage = nativeImage.createFromPath(pausedIconPath);
+          tray?.setImage(pausedImage);
+          tray?.setToolTip("Posely - Paused");
+        } else if (latestEngineTick) {
+          // Resume: Update icon based on latest tick
+          // eslint-disable-next-line no-use-before-define
+          updateTrayIcon(latestEngineTick);
+        }
+
+        // Broadcast status change to all renderer windows
+        BrowserWindow.getAllWindows().forEach((window) => {
+          window.webContents.send("app:status-changed", { isPaused });
+        });
+
+        // Rebuild menu to update label
+        updateTrayMenu(latestEngineTick);
+      },
+    },
+    { type: "separator" }, // Separator before system actions
+
+    // === SYSTEM GROUP ===
+    {
+      label: "Quit Posely",
+      click: () => {
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(contextMenu);
+
+  // E2E Testing: Expose menu state for verification
+  if (
+    isDebug ||
+    process.env.NODE_ENV === "test" ||
+    process.env.E2E_TEST === "true"
+  ) {
+    const menuTemplate = contextMenu.items.map((item) => ({
+      label: item.label,
+      type: item.type,
+      enabled: item.enabled,
+    }));
+
+    // eslint-disable-next-line no-underscore-dangle
+    globalThis.__trayMenuState = {
+      menuItemCount: menuTemplate.length,
+      separatorCount: menuTemplate.filter((item) => item.type === "separator")
+        .length,
+      menuStructure: menuTemplate,
+    };
+  }
+};
+
+/**
+ * Update tray icon and tooltip based on EngineTick score
+ */
+const updateTrayIcon = (tick: EngineTick) => {
+  if (!tray) {
+    return;
+  }
+
+  const trayInstance = tray; // Capture for type narrowing
+
+  try {
+    const iconPath = getTrayIconPath(tick);
+    const tooltip = getTrayTooltip(tick);
+
+    // Debug logging - always log to help diagnose issues
+    logger.info("Tray icon update", {
+      mode: USE_SIMPLE_THRESHOLD
+        ? `simple (neutral=${NEUTRAL_THRESHOLD})`
+        : "production",
+      score: tick.score,
+      state: tick.state,
+      presence: tick.presence,
+      reliability: tick.reliability,
+      iconPath: iconPath.split("/").pop(), // Just the filename
+      tooltip,
+    });
+
+    // E2E Testing: Expose state for verification
+    if (isDebug || process.env.NODE_ENV === "test") {
+      // eslint-disable-next-line no-underscore-dangle
+      const currentState = globalThis.__trayIconState;
+      const updateCount = currentState ? currentState.updateCount + 1 : 1;
+      // eslint-disable-next-line no-underscore-dangle
+      globalThis.__trayIconState = {
+        lastIconPath: iconPath,
+        lastTooltip: tooltip,
+        updateCount,
+        lastTick: tick,
+      };
+    }
+
+    // Use nativeImage to support both PNG and SVG
+    const image = nativeImage.createFromPath(iconPath);
+    if (!image.isEmpty()) {
+      trayInstance.setImage(image);
+      trayInstance.setToolTip(tooltip);
+      // Update menu with current status
+      updateTrayMenu(tick);
+    } else {
+      logger.warn("Failed to load tray icon", { iconPath });
+    }
+  } catch (error) {
+    logger.error("Failed to update tray icon", toErrorPayload(error));
+  }
+};
+
+const broadcastEngineTick = (tick: EngineTick) => {
+  logger.info("🟢 broadcastEngineTick called", {
+    score: tick.score,
+    state: tick.state,
+    presence: tick.presence,
+  });
+
+  latestEngineTick = tick;
+
+  // Update tray icon based on score
+  updateTrayIcon(tick);
+
+  // Process tick for data aggregation
+  processEngineTick(tick);
+
+  if (mainWindow) {
+    mainWindow.webContents.send(IPC_CHANNELS.engineTick, tick);
+  }
+};
+
+const forwardEngineTickToWorker = (tick: EngineTick) => {
+  if (!backgroundWorker) {
+    return;
+  }
+
+  try {
+    backgroundWorker.postMessage({
+      type: WORKER_MESSAGES.engineTick,
+      payload: tick,
+    });
+  } catch (error) {
+    logger.error(
+      "Failed to forward EngineTick to worker",
+      toErrorPayload(error),
+    );
+  }
+};
 const SIGNAL_TRACE_ENABLED = parseBooleanFlag(process.env.POSELY_SIGNAL_TRACE);
 const DEFAULT_TRACE_DIR = path.join(os.homedir(), ".posely", "signal-traces");
 const DEFAULT_TRACE_DIR_RESOLVED = path.resolve(DEFAULT_TRACE_DIR);
@@ -80,6 +551,14 @@ let signalTraceStream: fs.WriteStream | null = null;
 let signalTracePath: string | null = null;
 let signalTraceHeaderWritten = false;
 
+type PendingCalibrationPromise = {
+  resolve: (value: CalibrationCompletePayload) => void;
+  reject: (reason: Error) => void;
+};
+
+let pendingCalibration: PendingCalibrationPromise | null = null;
+let activeCalibration: CalibrationCompletePayload | null = null;
+
 const isPathWithinBase = (target: string, base: string): boolean => {
   const relative = path.relative(base, target);
   if (relative === "") {
@@ -87,6 +566,12 @@ const isPathWithinBase = (target: string, base: string): boolean => {
   }
   return !relative.startsWith("..") && !path.isAbsolute(relative);
 };
+
+const handleRendererEngineTick = createRendererTickHandler({
+  logger,
+  broadcast: broadcastEngineTick,
+  forwardToWorker: forwardEngineTickToWorker,
+});
 
 const resolveTracePath = (requested?: string | null): string => {
   if (SIGNAL_TRACE_FILE) {
@@ -195,6 +680,164 @@ const appendSignalTrace = (
 // The COOP/COEP headers are applied in configureSecurityHeaders(). Keep these in sync.
 app.commandLine.appendSwitch("enable-features", "SharedArrayBuffer");
 
+const broadcastCalibrationProgress = (progress: CalibrationProgress): void => {
+  if (!mainWindow) {
+    return;
+  }
+  mainWindow.webContents.send(IPC_CHANNELS.calibrationProgress, progress);
+};
+
+const broadcastCalibrationFailure = (failure: CalibrationFailure): void => {
+  if (!mainWindow) {
+    return;
+  }
+  mainWindow.webContents.send(IPC_CHANNELS.calibrationFailed, failure);
+};
+
+const broadcastCalibrationComplete = (
+  payload: CalibrationCompletePayload,
+): void => {
+  if (!mainWindow) {
+    return;
+  }
+  mainWindow.webContents.send(IPC_CHANNELS.calibrationComplete, payload);
+};
+
+const resolveCustomThresholdsFromRecord = (
+  record: PostureCalibrationRecord,
+): CalibrationCustomThresholds | null => {
+  const hasCustom =
+    record.customPitchThreshold !== null ||
+    record.customEHDThreshold !== null ||
+    record.customDPRThreshold !== null;
+  if (!hasCustom) {
+    return null;
+  }
+  return {
+    pitch: record.customPitchThreshold ?? undefined,
+    ehd: record.customEHDThreshold ?? undefined,
+    dpr: record.customDPRThreshold ?? undefined,
+  } as CalibrationCustomThresholds;
+};
+
+const hydrateCalibrationPayload = (
+  record: PostureCalibrationRecord,
+): CalibrationCompletePayload => {
+  const custom = resolveCustomThresholdsFromRecord(record);
+  const baseline = {
+    baselinePitch: record.baselinePitch,
+    baselineEHD: record.baselineEHD,
+    baselineDPR: record.baselineDPR,
+    quality: record.quality,
+    sampleCount: record.sampleCount,
+  };
+  const thresholds = deriveThresholds(baseline, record.sensitivity, custom);
+
+  return {
+    baseline,
+    sensitivity: record.sensitivity,
+    customThresholds: custom,
+    thresholds,
+    validation: {
+      quality: record.quality,
+      unreliableFrameRatio: 0,
+      suggestion: record.quality < 60 ? "recalibrate_low_quality" : "ok",
+    },
+    calibrationId: record.id,
+    recordedAt: record.calibratedAt,
+  } satisfies CalibrationCompletePayload;
+};
+
+const reliabilityTracker = {
+  samples: [] as number[],
+  maxSamples: 500,
+  threshold: 0.1,
+  lastNudgeAt: 0,
+};
+
+const notifyWorkerCalibrationApplied = (): void => {
+  if (!backgroundWorker || !activeCalibration) {
+    return;
+  }
+  backgroundWorker.postMessage({
+    type: WORKER_MESSAGES.calibrationApply,
+    payload: {
+      thresholds: activeCalibration.thresholds,
+    },
+  });
+};
+
+const persistCalibrationResult = (
+  result: CalibrationSessionResult,
+): CalibrationCompletePayload => {
+  const timestamp = Date.now();
+  const saved = savePostureCalibration({
+    baselinePitch: result.baseline.baselinePitch,
+    baselineEHD: result.baseline.baselineEHD,
+    baselineDPR: result.baseline.baselineDPR,
+    quality: result.baseline.quality,
+    sampleCount: result.baseline.sampleCount,
+    sensitivity: result.sensitivity,
+    customThresholds: result.customThresholds ?? undefined,
+    calibratedAt: timestamp,
+  });
+
+  markPostureCalibrationActive(saved.id, saved.userId);
+
+  const hydrated = hydrateCalibrationPayload(saved);
+  const payload: CalibrationCompletePayload = {
+    ...hydrated,
+    thresholds: result.thresholds,
+    validation: result.validation,
+  };
+  activeCalibration = payload;
+  reliabilityTracker.samples = [];
+  reliabilityTracker.lastNudgeAt = 0;
+  notifyWorkerCalibrationApplied();
+  return payload;
+};
+
+const getWorkerCalibrationPayload = () => {
+  if (!activeCalibration) {
+    return null;
+  }
+  return {
+    baselinePitch: activeCalibration.baseline.baselinePitch,
+    baselineEHD: activeCalibration.baseline.baselineEHD,
+    baselineDPR: activeCalibration.baseline.baselineDPR,
+  };
+};
+
+const recordReliabilitySample = (isUnreliable: boolean): void => {
+  reliabilityTracker.samples.push(isUnreliable ? 1 : 0);
+  if (reliabilityTracker.samples.length > reliabilityTracker.maxSamples) {
+    reliabilityTracker.samples.shift();
+  }
+};
+
+const maybeEmitCalibrationNudge = (): void => {
+  if (!mainWindow) {
+    return;
+  }
+  const { samples, threshold } = reliabilityTracker;
+  if (samples.length < 100) {
+    return;
+  }
+  const ratio = samples.reduce((sum, value) => sum + value, 0) / samples.length;
+  const now = Date.now();
+  if (
+    ratio >= threshold &&
+    now - reliabilityTracker.lastNudgeAt > 4 * 60 * 60 * 1000
+  ) {
+    reliabilityTracker.lastNudgeAt = now;
+    mainWindow.webContents.send(IPC_CHANNELS.calibrationNudge, {
+      reason: "frequent-unreliable",
+      ratio,
+      observedAt: new Date(now).toISOString(),
+    });
+  }
+};
+
 const installExtensions = async (): Promise<void> => {
   try {
     const installerModule = await import("electron-devtools-installer");
@@ -226,6 +869,11 @@ const initializeAppUpdater = (): void => {
 
 const dispatchWorkerMessage = (message: WorkerMessage) => {
   if (!mainWindow) {
+    if (message.type === WORKER_MESSAGES.engineTick) {
+      latestEngineTick = (message.payload ?? null) as EngineTick | null;
+      return;
+    }
+
     pendingWorkerMessages.push(message);
     return;
   }
@@ -237,6 +885,9 @@ const dispatchWorkerMessage = (message: WorkerMessage) => {
         IPC_CHANNELS.workerStatus,
         message.payload ?? null,
       );
+      if (message.type === WORKER_MESSAGES.ready) {
+        notifyWorkerCalibrationApplied();
+      }
       break;
     case WORKER_MESSAGES.pong:
       mainWindow.webContents.send(
@@ -245,12 +896,18 @@ const dispatchWorkerMessage = (message: WorkerMessage) => {
       );
       break;
     case WORKER_MESSAGES.engineTick:
-      // Story 1.4: Update tray icon based on zone
-      handlePostureUpdate(message.payload);
       mainWindow.webContents.send(
         IPC_CHANNELS.engineTick,
         message.payload ?? null,
       );
+      {
+        const enginePayload = message.payload as EngineTickPayload | null;
+        const reliability = enginePayload?.tick?.reliability ?? null;
+        if (reliability) {
+          recordReliabilitySample(reliability === "UNRELIABLE");
+          maybeEmitCalibrationNudge();
+        }
+      }
       break;
     case WORKER_MESSAGES.engineError:
       logger.warn("Worker reported engine error", {
@@ -261,30 +918,62 @@ const dispatchWorkerMessage = (message: WorkerMessage) => {
         message.payload ?? null,
       );
       break;
-    case WORKER_MESSAGES.persistPostureData: {
-      // Handle persisting posture data to database
-      const payload = message.payload as
-        | {
-            date: string;
-            secondsInGreen: number;
-            secondsInYellow: number;
-            secondsInRed: number;
-            avgScore: number;
-            sampleCount: number;
-          }
-        | undefined;
-
-      if (payload) {
-        try {
-          upsertDailyPostureLog(payload);
-          logger.info("Successfully persisted posture data", {
-            date: payload.date,
-          });
-        } catch (error) {
-          logger.error("Failed to persist posture data", {
-            error: error instanceof Error ? error.message : String(error),
-          });
+    case WORKER_MESSAGES.calibrationProgress: {
+      const progress = (message.payload ?? null) as CalibrationProgress | null;
+      if (progress) {
+        broadcastCalibrationProgress(progress);
+      }
+      break;
+    }
+    case WORKER_MESSAGES.calibrationComplete: {
+      const result = (message.payload ??
+        null) as CalibrationSessionResult | null;
+      if (!result) {
+        const failure: CalibrationFailure = {
+          reason: "unknown",
+          message: "Calibration complete payload was invalid.",
+        };
+        broadcastCalibrationFailure(failure);
+        if (pendingCalibration) {
+          pendingCalibration.reject(new Error(failure.message));
+          pendingCalibration = null;
         }
+        break;
+      }
+
+      try {
+        const payload = persistCalibrationResult(result);
+        broadcastCalibrationComplete(payload);
+        if (pendingCalibration) {
+          pendingCalibration.resolve(payload);
+          pendingCalibration = null;
+        }
+      } catch (error) {
+        const messageText =
+          error instanceof Error ? error.message : "Unknown error";
+        const failure: CalibrationFailure = {
+          reason: "unknown",
+          message: `Failed to persist calibration: ${messageText}`,
+        };
+        broadcastCalibrationFailure(failure);
+        if (pendingCalibration) {
+          pendingCalibration.reject(new Error(failure.message));
+          pendingCalibration = null;
+        }
+      }
+      break;
+    }
+    case WORKER_MESSAGES.calibrationFailed: {
+      const failurePayload = (message.payload ??
+        null) as CalibrationFailure | null;
+      const failure: CalibrationFailure = failurePayload ?? {
+        reason: "unknown",
+        message: "Calibration failed unexpectedly.",
+      };
+      broadcastCalibrationFailure(failure);
+      if (pendingCalibration) {
+        pendingCalibration.reject(new Error(failure.message));
+        pendingCalibration = null;
       }
       break;
     }
@@ -308,6 +997,10 @@ const flushPendingWorkerMessages = () => {
   messages.forEach((message) => {
     dispatchWorkerMessage(message);
   });
+
+  if (latestEngineTick) {
+    mainWindow.webContents.send(IPC_CHANNELS.engineTick, latestEngineTick);
+  }
 };
 
 const WORKER_BUNDLE_FILES = {
@@ -429,246 +1122,17 @@ const configureSecurityHeaders = () => {
   securityConfigured = true;
 };
 
-/**
- * Story 1.5: Build tray menu with improved visual organization
- *
- * Menu Grouping Philosophy:
- * - Status Group: Current posture state (informational only)
- * - Application Group: Actions that open new windows (Desktop, Dashboard, Settings)
- * - Monitoring Group: Controls for detection (Pause/Resume)
- * - System Group: App-level actions (Quit)
- */
-const buildTrayMenu = (): Electron.Menu => {
-  const statusLabel = isPaused ? "Status: Paused" : "Status: Monitoring";
-  const pauseResumeLabel = isPaused ? "Resume Monitoring" : "Pause Monitoring";
-
-  return ElectronMenu.buildFromTemplate([
-    // Status Group
-    {
-      label: statusLabel,
-      enabled: false,
-    },
-    { type: "separator" }, // Story 1.5: Separator after status
-
-    // Application Group
-    {
-      label: "Show Desktop",
-      click: () => {
-        if (mainWindow) {
-          if (mainWindow.isMinimized()) mainWindow.restore();
-          mainWindow.focus();
-        } else {
-          createWindow();
-        }
-      },
-    },
-    {
-      label: "Show Dashboard",
-      click: () => {
-        createDashboardWindow();
-      },
-    },
-    {
-      label: "Settings",
-      click: () => {
-        createSettingsWindow();
-      },
-    },
-    { type: "separator" }, // Story 1.5: Separator after application controls
-
-    // Monitoring Group
-    {
-      label: pauseResumeLabel,
-      click: () => {
-        togglePauseState();
-      },
-    },
-    { type: "separator" }, // Separator before system actions
-
-    // System Group
-    {
-      label: "Quit Posely",
-      click: () => {
-        app.quit();
-      },
-    },
-  ]);
-};
-
-// Story 1.4: Current posture zone from latest EngineTick
-let currentZone: "GREEN" | "YELLOW" | "RED" = "GREEN";
-
-/**
- * Story 1.4: Create a simple colored icon for the tray
- * This creates a 16x16 colored circle as the icon
- */
-const createColoredIcon = (color: string): Electron.NativeImage => {
-  // Create a simple SVG circle with the specified color
-  const svg = `
-    <svg width="16" height="16" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="8" cy="8" r="6" fill="${color}" stroke="#000000" stroke-width="0.5" opacity="0.9"/>
-    </svg>
-  `;
-
-  return nativeImage.createFromBuffer(Buffer.from(svg, "utf-8"));
-};
-
-/**
- * Story 1.4: Get zone color hex values from UX spec
- */
-const getZoneColor = (zone: "GREEN" | "YELLOW" | "RED"): string => {
-  switch (zone) {
-    case "GREEN":
-      return "#48BB78"; // Success green
-    case "YELLOW":
-      return "#F6E05E"; // Warning yellow
-    case "RED":
-      return "#F56565"; // Error red
-  }
-};
-
-/**
- * Story 1.4: Handle posture updates from worker's EngineTick
- * Updates the tray icon based on the zone field
- */
-const handlePostureUpdate = (payload: unknown): void => {
-  if (!payload || typeof payload !== "object") {
-    return;
-  }
-
-  const tickPayload = payload as EngineTickPayload;
-  const zone = tickPayload.tick?.zone;
-
-  if (!zone || typeof zone !== "string") {
-    return;
-  }
-
-  // Validate zone is one of the expected values
-  if (zone !== "GREEN" && zone !== "YELLOW" && zone !== "RED") {
-    logger.warn("Received invalid zone value from EngineTick", { zone });
-    return;
-  }
-
-  // Update current zone and tray icon
-  const previousZone = currentZone;
-  currentZone = zone;
-
-  if (previousZone !== currentZone) {
-    logger.info("Posture zone changed, updating tray icon", {
-      from: previousZone,
-      to: currentZone,
-    });
-    updateTrayIcon();
-  }
-};
-
-const updateTrayIcon = () => {
-  if (!tray) {
-    return;
-  }
-
-  const RESOURCES_PATH = app.isPackaged
-    ? path.join(process.resourcesPath, "assets")
-    : path.join(__dirname, "../../assets");
-
-  const getAssetPath = (...paths: string[]): string => {
-    return path.join(RESOURCES_PATH, ...paths);
-  };
-
-  let trayIcon: Electron.NativeImage;
-
-  // Story 1.4: Use paused icon if paused, otherwise use zone-based colored icon
-  if (isPaused) {
-    const trayIconPath = getAssetPath("icons", "16x16-paused.png");
-    const icon = nativeImage.createFromPath(trayIconPath);
-    trayIcon = icon.resize({ width: 16, height: 16 });
-  } else {
-    // Create colored icon based on current zone
-    const color = getZoneColor(currentZone);
-    trayIcon = createColoredIcon(color);
-  }
-
-  tray.setImage(trayIcon);
-};
-
-const updateTrayMenu = () => {
-  if (!tray) {
-    return;
-  }
-
-  const contextMenu = buildTrayMenu();
-  tray.setContextMenu(contextMenu);
-};
-
-const togglePauseState = () => {
-  isPaused = !isPaused;
-
-  // Update tray icon
-  updateTrayIcon();
-
-  // Update tray menu
-  updateTrayMenu();
-
-  // Send message to worker
-  if (backgroundWorker) {
-    backgroundWorker.postMessage({
-      type: WORKER_MESSAGES.setPaused,
-      payload: { paused: isPaused },
-    });
-  }
-
-  // Broadcast to all renderer windows
-  if (mainWindow) {
-    mainWindow.webContents.send(IPC_CHANNELS.appStatusChanged, {
-      isPaused,
-    });
-  }
-
-  logger.info(`Monitoring ${isPaused ? "paused" : "resumed"}`, { isPaused });
-};
-
-const createTray = () => {
-  if (tray) {
-    return tray;
-  }
-
-  const RESOURCES_PATH = app.isPackaged
-    ? path.join(process.resourcesPath, "assets")
-    : path.join(__dirname, "../../assets");
-
-  const getAssetPath = (...paths: string[]): string => {
-    return path.join(RESOURCES_PATH, ...paths);
-  };
-
-  // Create a simple 16x16 icon
-  const trayIconPath = getAssetPath("icons", "16x16.png");
-
-  // Create native image and resize for tray
-  const icon = nativeImage.createFromPath(trayIconPath);
-  const trayIcon = icon.resize({ width: 16, height: 16 });
-
-  tray = new Tray(trayIcon);
-  tray.setToolTip("Posely - Posture Monitor");
-
-  // Create context menu for tray using dynamic builder
-  const contextMenu = buildTrayMenu();
-  tray.setContextMenu(contextMenu);
-
-  // On macOS, clicking the tray icon should show the main window
-  tray.on("click", () => {
-    if (mainWindow) {
-      if (mainWindow.isVisible()) {
-        mainWindow.hide();
-      } else {
-        mainWindow.show();
-        mainWindow.focus();
-      }
-    }
+ipcMain.on(IPC_CHANNELS.engineCaptureTick, (_event, payload: unknown) => {
+  logger.info("🔵 Received engineCaptureTick from renderer", {
+    hasPayload: !!payload,
+    payloadType: typeof payload,
+    payloadKeys:
+      payload && typeof payload === "object"
+        ? Object.keys(payload as Record<string, unknown>)
+        : [],
   });
-
-  logger.info("System tray icon created");
-  return tray;
-};
+  handleRendererEngineTick(payload);
+});
 
 ipcMain.on(IPC_CHANNELS.rendererPing, (event, arg) => {
   if (arg === "error") {
@@ -696,6 +1160,9 @@ ipcMain.on(IPC_CHANNELS.workerRequest, (event) => {
     state: "online",
     observedAt: new Date().toISOString(),
   });
+  if (latestEngineTick) {
+    event.sender.send(IPC_CHANNELS.engineTick, latestEngineTick);
+  }
   backgroundWorker.postMessage({ type: WORKER_MESSAGES.ping });
 });
 
@@ -703,29 +1170,9 @@ ipcMain.handle(IPC_CHANNELS.triggerMainError, () => {
   throw new Error("Intentional Main Process Error from Renderer");
 });
 
-// TODO: check whether `openCameraPrivacySettings` is overlapping with cameraPermissions.ts (`IPC_CHANNELS.requestCameraPermission`, `IPC_CHANNELS.openCameraSettings`)
-ipcMain.handle(IPC_CHANNELS.openCameraPrivacySettings, async () => {
-  const { platform } = process;
-  const targets: Record<string, string> = {
-    darwin:
-      "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera",
-    win32: "ms-settings:privacy-webcam",
-  };
-
-  const fallbackUrl = "https://support.apple.com/en-us/HT211193";
-  const target = targets[platform] ?? fallbackUrl;
-
-  try {
-    await shell.openExternal(target);
-    return { opened: true };
-  } catch (error: unknown) {
-    logger.error(
-      "Failed to open camera privacy settings",
-      toErrorPayload(error),
-    );
-    throw error;
-  }
-});
+ipcMain.handle(IPC_CHANNELS.openCameraPrivacySettings, () =>
+  openCameraSettings(),
+);
 
 ipcMain.on(IPC_CHANNELS.triggerWorkerError, () => {
   if (backgroundWorker) {
@@ -784,7 +1231,10 @@ ipcMain.on(IPC_CHANNELS.engineFrame, (_event, payload: unknown) => {
 
   backgroundWorker.postMessage({
     type: WORKER_MESSAGES.engineFrame,
-    payload,
+    payload: {
+      ...payload,
+      calibration: getWorkerCalibrationPayload(),
+    },
   });
 });
 
@@ -796,24 +1246,101 @@ app.on("before-quit", () => {
     signalTraceHeaderWritten = false;
   }
 });
+ipcMain.handle(
+  IPC_CHANNELS.calibrationStart,
+  (_event, payload: unknown): Promise<CalibrationCompletePayload> => {
+    if (!backgroundWorker) {
+      throw new Error("Calibration worker is not ready.");
+    }
+    if (pendingCalibration) {
+      throw new Error("Calibration already in progress.");
+    }
+
+    const request = (payload ?? null) as CalibrationStartRequest | null;
+    const options = {
+      sensitivity: request?.sensitivity,
+      customThresholds: request?.customThresholds ?? null,
+      targetSamples: request?.targetSamples,
+      minQuality: request?.minQuality,
+      validationDurationMs: request?.validationDurationMs,
+    } satisfies CalibrationStartRequest;
+
+    return new Promise<CalibrationCompletePayload>((resolve, reject) => {
+      pendingCalibration = { resolve, reject };
+      backgroundWorker?.postMessage({
+        type: WORKER_MESSAGES.calibrationStart,
+        payload: options,
+      });
+    });
+  },
+);
+
+ipcMain.handle(IPC_CHANNELS.calibrationLoad, () => {
+  if (activeCalibration) {
+    return activeCalibration;
+  }
+  const record = getActivePostureCalibration();
+  if (!record) {
+    return null;
+  }
+  const payload = hydrateCalibrationPayload(record);
+  activeCalibration = payload;
+  reliabilityTracker.samples = [];
+  reliabilityTracker.lastNudgeAt = 0;
+  notifyWorkerCalibrationApplied();
+  return payload;
+});
+
+ipcMain.handle(
+  IPC_CHANNELS.calibrationUpdateSensitivity,
+  (_event, payload: unknown) => {
+    const request = (payload ??
+      null) as CalibrationSensitivityUpdateRequest | null;
+    if (!request || typeof request.calibrationId !== "number") {
+      throw new Error("Invalid calibration sensitivity update request.");
+    }
+    const updated = updatePostureCalibrationSensitivity(
+      request.calibrationId,
+      request.sensitivity,
+      request.customThresholds ?? undefined,
+    );
+    if (!updated) {
+      throw new Error("Calibration record not found.");
+    }
+    markPostureCalibrationActive(updated.id, updated.userId);
+    const response = hydrateCalibrationPayload(updated);
+    activeCalibration = response;
+    reliabilityTracker.samples = [];
+    reliabilityTracker.lastNudgeAt = 0;
+    notifyWorkerCalibrationApplied();
+    return response;
+  },
+);
+
 ipcMain.handle(IPC_CHANNELS.requestCameraPermission, () =>
   requestCameraPermission(),
 );
 
-ipcMain.handle(IPC_CHANNELS.openCameraSettings, () => openCameraSettings());
+ipcMain.handle(IPC_CHANNELS.getDailySummary, () => {
+  try {
+    const summary = getTodaySummary();
+    const streak = calculateStreak();
+    return summary ? { ...summary, streak } : null;
+  } catch (error) {
+    logger.error("Failed to get daily summary", toErrorPayload(error));
+    return null;
+  }
+});
 
-if (process.env.NODE_ENV === "production") {
-  import("source-map-support")
-    .then(({ install }) => {
-      return install();
-    })
-    .catch((error: unknown) => {
-      logger.warn(
-        "Failed to install source map support",
-        toErrorPayload(error),
-      );
-    });
-}
+ipcMain.handle(IPC_CHANNELS.getWeeklySummary, () => {
+  try {
+    const weeklySummary = getWeeklySummary();
+    return weeklySummary;
+  } catch (error) {
+    logger.error("Failed to get weekly summary", toErrorPayload(error));
+    return [];
+  }
+});
 
 ipcMain.handle(IPC_CHANNELS.getSetting, (_event, key: string) => {
   try {
@@ -847,110 +1374,89 @@ ipcMain.handle(
   },
 );
 
-ipcMain.handle(IPC_CHANNELS.openSettings, () => {
+ipcMain.handle(IPC_CHANNELS.reCalibrate, async () => {
   try {
-    createSettingsWindow();
-    return { success: true };
-  } catch (error) {
-    logger.error("Failed to open settings window", toErrorPayload(error));
-    return { success: false, error: String(error) };
-  }
-});
+    logger.info("Re-calibrate requested, starting standalone calibration");
 
-ipcMain.handle(IPC_CHANNELS.reCalibrate, () => {
-  try {
     // Close settings window if open
-    closeSettingsWindow();
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+      settingsWindow.close();
+    }
 
-    // TODO: Trigger calibration flow from Story 1.2
-    // For now, just log that we received the request
-    logger.info("Re-calibration requested from settings");
+    // Prepare calibration URL
+    const baseUrl = resolveHtmlPath("index.html");
+    const url = new URL(baseUrl);
+    url.hash = "#/calibration";
+    if (process.env.PREFER_CONTINUITY_CAMERA === "true") {
+      url.searchParams.set("preferContinuityCamera", "1");
+    }
+
+    // Navigate to standalone calibration (no wizard UI)
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      // CRITICAL: Show and focus window BEFORE loading calibration
+      // This ensures camera permissions and visibility are established
+      mainWindow.show();
+      mainWindow.focus();
+
+      // Wait a brief moment for window to be fully visible
+      // This prevents camera initialization failures when window was hidden
+      await new Promise((resolve) => {
+        setTimeout(resolve, WINDOW_SHOW_DELAY_MS);
+      });
+
+      await mainWindow.loadURL(url.toString());
+      logger.info("Calibration route loaded successfully");
+    } else {
+      // If main window doesn't exist, create it and navigate to calibration
+      // eslint-disable-next-line no-use-before-define
+      await createWindow();
+      logger.info("Created new window for recalibration");
+
+      // Now navigate the newly created window to calibration
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.show();
+        mainWindow.focus();
+        await new Promise((resolve) => {
+          setTimeout(resolve, WINDOW_SHOW_DELAY_MS);
+        });
+        await mainWindow.loadURL(url.toString());
+        logger.info("Navigated new window to calibration route");
+      }
+    }
 
     return { success: true };
   } catch (error) {
-    logger.error("Failed to trigger re-calibration", toErrorPayload(error));
+    logger.error("Failed to handle re-calibrate", toErrorPayload(error));
     return { success: false, error: String(error) };
   }
 });
 
-ipcMain.handle(IPC_CHANNELS.getDailySummary, async () => {
-  try {
-    const currentDate = new Date().toISOString().split("T")[0] ?? "";
-
-    // Get data from database
-    const dbData = getDailyPostureLogByDate(currentDate);
-
-    if (dbData) {
-      logger.info("Retrieved daily summary from database", {
-        date: currentDate,
-      });
-      return {
-        success: true,
-        data: {
-          date: dbData.date,
-          secondsInGreen: dbData.secondsInGreen,
-          secondsInYellow: dbData.secondsInYellow,
-          secondsInRed: dbData.secondsInRed,
-          avgScore: dbData.avgScore,
-          sampleCount: dbData.sampleCount,
-        },
-      };
-    } else {
-      logger.info("No daily summary data found for today", {
-        date: currentDate,
-      });
-      return {
-        success: true,
-        data: {
-          date: currentDate,
-          secondsInGreen: 0,
-          secondsInYellow: 0,
-          secondsInRed: 0,
-          avgScore: 0,
-          sampleCount: 0,
-        },
-      };
-    }
-  } catch (error) {
-    logger.error("Failed to get daily summary", toErrorPayload(error));
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-});
-
-ipcMain.handle(IPC_CHANNELS.getWeeklySummary, async () => {
-  try {
-    // Get weekly data from database
-    const weeklyData = getWeeklySummary();
-
-    logger.info(`Retrieved weekly summary with ${weeklyData.length} records`);
-    
-    // Transform to expected format
-    const formattedData = weeklyData.map((log) => ({
-      date: log.date,
-      score: log.avgScore,
-    }));
-
-    return {
-      success: true,
-      data: formattedData,
-    };
-  } catch (error) {
-    logger.error("Failed to get weekly summary", toErrorPayload(error));
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-});
-
-const isDebug =
-  process.env.NODE_ENV === "development" || process.env.DEBUG_PROD === "true";
+if (process.env.NODE_ENV === "production") {
+  import("source-map-support")
+    .then(({ install }) => {
+      return install();
+    })
+    .catch((error: unknown) => {
+      logger.warn(
+        "Failed to install source map support",
+        toErrorPayload(error),
+      );
+    });
+}
 
 const shouldInstallDevtoolsExtensions =
   isDebug && process.env.ENABLE_DEVTOOLS_EXTENSIONS === "true";
+
+// E2E Testing: Expose tray state for verification
+if (isDebug || process.env.NODE_ENV === "test") {
+  // eslint-disable-next-line no-underscore-dangle
+  globalThis.__trayIconState = {
+    lastIconPath: "",
+    lastTooltip: "",
+    updateCount: 0,
+    lastTick: null,
+  };
+}
 
 if (isDebug) {
   import("electron-debug")
@@ -968,13 +1474,161 @@ if (isDebug) {
     });
 }
 
+let dashboardWindow: BrowserWindow | null = null;
+
+/**
+ * Create and show the settings window
+ */
+const createSettingsWindow = () => {
+  // If settings window already exists, focus it
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.show();
+    settingsWindow.focus();
+    return;
+  }
+
+  settingsWindow = new BrowserWindow({
+    width: 500,
+    height: 600,
+    resizable: false,
+    icon: getAssetPath("icon.png"),
+    webPreferences: {
+      preload: app.isPackaged
+        ? path.join(__dirname, "preload.js")
+        : path.join(__dirname, "../../.erb/dll/preload.js"),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: process.env.ELECTRON_SANDBOX === "true",
+      webSecurity: true,
+    },
+  });
+
+  const baseUrl = resolveHtmlPath("index.html");
+  const url = new URL(baseUrl);
+  url.hash = "#/settings"; // Use hash routing for the settings
+
+  settingsWindow.loadURL(url.toString()).catch((error: unknown) => {
+    logger.error("Failed to load settings window", toErrorPayload(error));
+  });
+
+  settingsWindow.on("closed", () => {
+    settingsWindow = null;
+  });
+
+  logger.info("Settings window created");
+};
+
+// E2E Testing: Expose settings window creation for tests
+if (
+  process.env.NODE_ENV === "test" ||
+  process.env.E2E_TEST === "true" ||
+  !app.isPackaged
+) {
+  // eslint-disable-next-line no-underscore-dangle -- Test-only global variable
+  (
+    globalThis as typeof globalThis & { __createSettingsWindow?: () => void }
+  ).__createSettingsWindow = createSettingsWindow;
+}
+
+/**
+ * Create and show the dashboard window
+ */
+const createDashboardWindow = () => {
+  // If dashboard window already exists, focus it
+  if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+    dashboardWindow.show();
+    dashboardWindow.focus();
+    return;
+  }
+
+  dashboardWindow = new BrowserWindow({
+    width: 400,
+    height: 600,
+    resizable: false,
+    icon: getAssetPath("icon.png"),
+    webPreferences: {
+      preload: app.isPackaged
+        ? path.join(__dirname, "preload.js")
+        : path.join(__dirname, "../../.erb/dll/preload.js"),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: process.env.ELECTRON_SANDBOX === "true",
+      webSecurity: true,
+      enableBlinkFeatures: "SharedArrayBuffer",
+    },
+  });
+
+  const baseUrl = resolveHtmlPath("index.html");
+  const url = new URL(baseUrl);
+  url.hash = "#/dashboard"; // Use hash routing for the dashboard
+  if (process.env.PREFER_CONTINUITY_CAMERA === "true") {
+    url.searchParams.set("preferContinuityCamera", "1");
+  }
+
+  dashboardWindow.loadURL(url.toString()).catch((error: unknown) => {
+    logger.error("Failed to load dashboard window", toErrorPayload(error));
+  });
+
+  dashboardWindow.on("closed", () => {
+    dashboardWindow = null;
+  });
+
+  // When dashboard window finishes loading, broadcast a data refresh to all windows
+  // This ensures both the main window and dashboard window have the latest data
+  dashboardWindow.webContents.once("did-finish-load", () => {
+    logger.info(
+      "Dashboard window loaded, broadcasting data refresh to all windows",
+    );
+    const allWindows = BrowserWindow.getAllWindows();
+    allWindows.forEach((window) => {
+      if (!window.isDestroyed()) {
+        window.webContents.send(IPC_CHANNELS.postureDataUpdated);
+      }
+    });
+  });
+
+  logger.info("Dashboard window created");
+};
+
+/**
+ * Initialize the system tray icon
+ * Starts with gray (neutral) icon until first EngineTick received
+ */
+const createTray = () => {
+  if (tray) {
+    return tray;
+  }
+
+  const iconPath = getAssetPath("icons", "tray-gray.png");
+  const image = nativeImage.createFromPath(iconPath);
+
+  try {
+    tray = new Tray(image);
+    tray.setToolTip("Posely - Starting up…");
+
+    // Initialize context menu with organized structure
+    // Will be updated dynamically as EngineTick updates arrive
+    updateTrayMenu(null);
+
+    logger.info("Tray icon initialized with organized menu structure", {
+      iconPath,
+    });
+  } catch (error) {
+    logger.error("Failed to create tray icon", toErrorPayload(error));
+  }
+
+  return tray;
+};
+
 const createWindow = async () => {
+  // Prevent creating multiple windows
+  if (mainWindow !== null) {
+    logger.warn("Window already exists, skipping creation");
+    return;
+  }
+
   // Check if onboarding has been completed
   const onboardingCompleted = getSetting("onboardingCompleted");
-  logger.debug("Onboarding check", {
-    onboardingCompleted,
-    type: typeof onboardingCompleted,
-  });
   const shouldShowOnboarding = onboardingCompleted !== "true";
 
   if (shouldShowOnboarding) {
@@ -991,18 +1645,10 @@ const createWindow = async () => {
     );
   }
 
-  const RESOURCES_PATH = app.isPackaged
-    ? path.join(process.resourcesPath, "assets")
-    : path.join(__dirname, "../../assets");
-
-  const getAssetPath = (...paths: string[]): string => {
-    return path.join(RESOURCES_PATH, ...paths);
-  };
-
   mainWindow = new BrowserWindow({
     show: false,
-    width: 1024,
-    height: 728,
+    width: shouldShowOnboarding ? 800 : 1024,
+    height: shouldShowOnboarding ? 600 : 728,
     icon: getAssetPath("icon.png"),
     webPreferences: {
       preload: app.isPackaged
@@ -1018,10 +1664,6 @@ const createWindow = async () => {
     },
   });
 
-  if (shouldShowOnboarding) {
-    // Load onboarding page
-  }
-
   // Build URL and pass dev-time feature flags to renderer via query params
   const baseUrl = resolveHtmlPath("index.html");
   const url = new URL(baseUrl);
@@ -1029,9 +1671,12 @@ const createWindow = async () => {
     url.searchParams.set("preferContinuityCamera", "1");
   }
 
-  mainWindow.loadURL(url.toString()).catch((error: unknown) => {
-    logger.error("Failed to load main window URL", toErrorPayload(error));
-  });
+  // Set hash route based on onboarding status
+  if (shouldShowOnboarding) {
+    url.hash = "#/onboarding";
+  }
+
+  await mainWindow.loadURL(url.toString());
 
   mainWindow.webContents.once("did-finish-load", () => {
     flushPendingWorkerMessages();
@@ -1106,9 +1751,6 @@ const createWindow = async () => {
   const menuBuilder = new MenuBuilder(mainWindow);
   menuBuilder.buildMenu();
 
-  // Create system tray
-  createTray();
-
   // Open urls in the user's browser
   mainWindow.webContents.setWindowOpenHandler((edata) => {
     shell.openExternal(edata.url).catch((error: unknown) => {
@@ -1129,6 +1771,10 @@ const createWindow = async () => {
  */
 
 app.on("before-quit", () => {
+  // Stop posture data aggregator and save any pending data
+  stopPostureDataAggregator();
+  stopDashboardHttpServer();
+
   if (backgroundWorker) {
     backgroundWorker.terminate().catch((error: unknown) => {
       logger.warn(
@@ -1139,6 +1785,7 @@ app.on("before-quit", () => {
     backgroundWorker = null;
   }
 
+  // Clean up tray icon
   if (tray) {
     tray.destroy();
     tray = null;
@@ -1153,9 +1800,24 @@ app.on("window-all-closed", () => {
   }
 });
 
+app.on("activate", () => {
+  // On macOS it's common to re-create a window in the app when the
+  // dock icon is clicked and there are no other windows open.
+  if (mainWindow === null) {
+    createWindow().catch((error: unknown) => {
+      logger.error(
+        "Failed to create window after activation",
+        toErrorPayload(error),
+      );
+    });
+  }
+});
+
 const onAppReady = async () => {
-  // Initialize database before any other operations that might need it
+  configureSecurityHeaders();
+  // Initialize database BEFORE any other operations that might use it
   try {
+    const { initializeDatabase } = await import("./database/client.js");
     initializeDatabase();
     logger.info("Database initialized successfully");
   } catch (error: unknown) {
@@ -1163,8 +1825,37 @@ const onAppReady = async () => {
     throw error;
   }
 
-  configureSecurityHeaders();
-  registerCalibrationHandler();
+  registerCalibrationHandler({
+    onBaselineSaved: () => {
+      if (backgroundWorker) {
+        backgroundWorker.postMessage({
+          type: WORKER_MESSAGES.refreshBaseline,
+        });
+      }
+    },
+  });
+
+  const existingCalibration = getActivePostureCalibration();
+  if (existingCalibration) {
+    activeCalibration = hydrateCalibrationPayload(existingCalibration);
+    notifyWorkerCalibrationApplied();
+  }
+
+  // Apply launch at startup setting
+  try {
+    const launchAtStartupValue = getSetting("launchAtStartup");
+    const enabled = launchAtStartupValue === "true";
+    app.setLoginItemSettings({
+      openAtLogin: enabled,
+    });
+    logger.info(`Launch at startup ${enabled ? "enabled" : "disabled"}`);
+  } catch (error) {
+    logger.warn(
+      "Failed to apply launch at startup setting",
+      toErrorPayload(error),
+    );
+  }
+
   // In production, avoid relative file reads resolving to protected folders like Desktop
   if (!isDebug) {
     try {
@@ -1177,20 +1868,107 @@ const onAppReady = async () => {
       logger.warn("Failed to change working directory", toErrorPayload(err));
     }
   }
+  // Initialize tray icon before starting worker and window
+  createTray();
+  startDashboardHttpServer();
+  // Start posture data aggregator with callback to broadcast updates
+  startPostureDataAggregator(() => {
+    // Broadcast data update to all windows
+    const allWindows = BrowserWindow.getAllWindows();
+    allWindows.forEach((window) => {
+      if (!window.isDestroyed()) {
+        window.webContents.send(IPC_CHANNELS.postureDataUpdated);
+      }
+    });
+    logger.info("Broadcasted posture data update to all windows", {
+      windowCount: allWindows.length,
+    });
+  });
   startWorker();
   await createWindow();
-  app.on("activate", () => {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
-    if (mainWindow === null) {
-      createWindow().catch((error: unknown) => {
-        logger.error(
-          "Failed to create window after activation",
-          toErrorPayload(error),
-        );
-      });
-    }
-  });
+
+  // DEV ONLY: Add keyboard shortcuts to test tray icon with different scores
+  // NOTE: Global shortcuts can interfere with macOS system shortcuts (like Cmd+Shift+4 for screenshots)
+  // Set DISABLE_TEST_SHORTCUTS=true to disable these shortcuts
+  if (isDebug && process.env.DISABLE_TEST_SHORTCUTS !== "true") {
+    const { globalShortcut } = await import("electron");
+
+    // Cmd+1: Test with score 90 (green)
+    globalShortcut.register("CommandOrControl+1", () => {
+      const testTick: EngineTick = {
+        t: Date.now(),
+        presence: "PRESENT",
+        reliability: "OK",
+        zone: "GREEN",
+        state: "GOOD",
+        score: 90,
+        metrics: { pitchDeg: 5, ehdNorm: 0.08, dpr: 1.02, conf: 0.9 },
+      };
+      logger.info("🧪 TEST: Injecting high score EngineTick (90)", testTick);
+      broadcastEngineTick(testTick);
+    });
+
+    // Cmd+2: Test with score 65 (yellow - below threshold)
+    globalShortcut.register("CommandOrControl+2", () => {
+      const testTick: EngineTick = {
+        t: Date.now(),
+        presence: "PRESENT",
+        reliability: "OK",
+        zone: "YELLOW",
+        state: "AT_RISK",
+        score: 65,
+        metrics: { pitchDeg: 15, ehdNorm: 0.15, dpr: 1.08, conf: 0.85 },
+      };
+      logger.info(
+        "🧪 TEST: Injecting below-threshold score EngineTick (65)",
+        testTick,
+      );
+      broadcastEngineTick(testTick);
+    });
+
+    // Cmd+3: Test with score 50 (red)
+    globalShortcut.register("CommandOrControl+3", () => {
+      const testTick: EngineTick = {
+        t: Date.now(),
+        presence: "PRESENT",
+        reliability: "OK",
+        zone: "RED",
+        state: "BAD_POSTURE",
+        score: 50,
+        metrics: { pitchDeg: 25, ehdNorm: 0.22, dpr: 1.12, conf: 0.8 },
+      };
+      logger.info("🧪 TEST: Injecting low score EngineTick (50)", testTick);
+      broadcastEngineTick(testTick);
+    });
+
+    // Cmd+0: Test IDLE state (gray)
+    globalShortcut.register("CommandOrControl+0", () => {
+      const testTick: EngineTick = {
+        t: Date.now(),
+        presence: "ABSENT",
+        reliability: "OK",
+        zone: "GREEN",
+        state: "IDLE",
+        score: 70,
+        metrics: { pitchDeg: 0, ehdNorm: 0, dpr: 1.0, conf: 0 },
+      };
+      logger.info("🧪 TEST: Injecting IDLE EngineTick", testTick);
+      broadcastEngineTick(testTick);
+    });
+
+    logger.info("🎹 Test keyboard shortcuts registered", {
+      shortcuts: [
+        "Cmd+1: Score 90 (green)",
+        "Cmd+2: Score 65 (yellow/red - below threshold)",
+        "Cmd+3: Score 50 (red)",
+        "Cmd+0: IDLE (gray)",
+        "Note: Set DISABLE_TEST_SHORTCUTS=true to disable if interfering with system shortcuts",
+      ],
+      mode: USE_SIMPLE_THRESHOLD
+        ? `Simple mode: score >= ${NEUTRAL_THRESHOLD} = green, < ${NEUTRAL_THRESHOLD} = red`
+        : "Production mode: >=80 green, >=60 yellow, <60 red",
+    });
+  }
 };
 
 app

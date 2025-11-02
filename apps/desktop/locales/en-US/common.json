@@ -31,7 +31,8 @@
     "waitingForWorker": "Waiting for worker response…",
     "workerBooting": "Worker booting…",
     "workerResponse": "Worker Response",
-    "workerStatus": "Worker Status"
+    "workerStatus": "Worker Status",
+    "engineTick": "Engine Tick Data"
   },
   "camera": {
     "title": "Enable Camera Access",

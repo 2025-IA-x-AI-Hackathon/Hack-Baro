@@ -1,3 +1,4 @@
+import type { CalibrationThresholds } from "../../shared/types/calibration";
 import type { DetectorResult } from "../../shared/types/detector";
 import type { EngineTick } from "../../shared/types/engine-output";
 import type {
@@ -7,6 +8,7 @@ import type {
 } from "../../shared/types/engine-state";
 import type { MetricValues } from "../../shared/types/metrics";
 import type { ScoreSample } from "../../shared/types/score";
+import type { RiskConfigOverrides } from "../config/detection-config";
 import {
   RiskDetector,
   type RiskDetectorUpdateInput,
@@ -23,6 +25,7 @@ import type { EngineDiagnosticsInput, EngineTickBuildInput } from "./types";
 
 type RiskDetectorLike = {
   update: (input: RiskDetectorUpdateInput) => RiskStateSnapshot;
+  updateConfig: (overrides: RiskConfigOverrides) => void;
 };
 
 export type EngineCoordinatorOptions = {
@@ -108,6 +111,17 @@ export class EngineCoordinator {
 
   reset(): void {
     this.builder.reset();
+  }
+
+  updateRiskThresholds(thresholds: CalibrationThresholds): void {
+    const overrides: RiskConfigOverrides = {
+      thresholds: {
+        pitchDeg: thresholds.pitch,
+        ehdNorm: thresholds.ehd,
+        dprDelta: thresholds.dpr,
+      },
+    };
+    this.riskDetector.updateConfig(overrides);
   }
 
   update(input: EngineCoordinatorUpdateInput): EngineCoordinatorUpdateOutput {

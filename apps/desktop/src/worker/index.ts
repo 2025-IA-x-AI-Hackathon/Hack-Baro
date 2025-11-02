@@ -1,19 +1,28 @@
 import { parentPort, workerData } from "node:worker_threads";
+import { getLatestCalibrationBaseline } from "../main/database/calibrationRepository";
 import { WORKER_MESSAGES, type WorkerMessage } from "../shared/ipcChannels";
 import { getLogger } from "../shared/logger";
+import type { CalibrationThresholds } from "../shared/types/calibration";
 import type { DetectorResult } from "../shared/types/detector";
 import type {
   EngineFramePayload,
   EngineTickPayload,
 } from "../shared/types/engine-ipc";
-import type { ScoreZone } from "../shared/types/score";
+import { MetricValues } from "../shared/types/metrics";
+import {
+  CalibrationFlow,
+  type CalibrationFlowOptions,
+} from "./calibration/calibration-flow";
 import {
   type DetectionGuardrailOverrides,
   updateDetectionGuardrailConfig,
 } from "./config/detection-config";
 import { EngineCoordinator } from "./engine";
 import { setGuardrailDebugEnabled } from "./guardrails/debug-flags";
+import { EngineTickEmitter } from "./posture/engineTickEmitter";
 import "./sentry";
+
+type TimeoutHandle = ReturnType<typeof setTimeout>;
 
 const port = parentPort;
 
@@ -29,107 +38,29 @@ const logger = getLogger("worker-runtime", "worker");
 
 const engineCoordinator = new EngineCoordinator();
 let lastEngineFrameTimestamp: number | null = null;
-let isAnalysisPaused = false;
+const calibrationFlow = new CalibrationFlow();
 
-// Posture data accumulator for the current day
-type PostureAccumulator = {
-  date: string; // YYYY-MM-DD format
-  secondsInGreen: number;
-  secondsInYellow: number;
-  secondsInRed: number;
-  scoreSum: number;
-  sampleCount: number;
-  lastTickTimestamp: number | null;
-};
-
-let postureAccumulator: PostureAccumulator = {
-  date: new Date().toISOString().split("T")[0] ?? "",
-  secondsInGreen: 0,
-  secondsInYellow: 0,
-  secondsInRed: 0,
-  scoreSum: 0,
-  sampleCount: 0,
-  lastTickTimestamp: null,
-};
-
-const getCurrentDate = (): string => {
-  return new Date().toISOString().split("T")[0] ?? ""; // YYYY-MM-DD
-};
-
-const resetAccumulatorIfNewDay = () => {
-  const currentDate = getCurrentDate();
-  if (postureAccumulator.date !== currentDate) {
-    logger.info(`New day detected, persisting final data for ${postureAccumulator.date} before reset`);
-    
-    // Persist the previous day's final data before resetting
-    persistPostureData();
-    
-    logger.info(`Resetting accumulator for new day: ${currentDate}`);
-    postureAccumulator = {
-      date: currentDate,
-      secondsInGreen: 0,
-      secondsInYellow: 0,
-      secondsInRed: 0,
-      scoreSum: 0,
-      sampleCount: 0,
-      lastTickTimestamp: null,
-    };
-  }
-};
-
-const updatePostureAccumulator = (zone: ScoreZone, score: number, timestamp: number) => {
-  resetAccumulatorIfNewDay();
-
-  // Calculate elapsed time since last tick (in seconds)
-  // Assume ticks come roughly every second, but we calculate based on actual time difference
-  const elapsedSeconds =
-    postureAccumulator.lastTickTimestamp !== null
-      ? Math.min((timestamp - postureAccumulator.lastTickTimestamp) / 1000, 5) // Cap at 5 seconds to avoid anomalies
-      : 1; // First tick, assume 1 second
-
-  // Increment zone seconds
-  if (zone === "GREEN") {
-    postureAccumulator.secondsInGreen += elapsedSeconds;
-  } else if (zone === "YELLOW") {
-    postureAccumulator.secondsInYellow += elapsedSeconds;
-  } else if (zone === "RED") {
-    postureAccumulator.secondsInRed += elapsedSeconds;
-  }
-
-  // Update score sum and sample count
-  postureAccumulator.scoreSum += score;
-  postureAccumulator.sampleCount += 1;
-  postureAccumulator.lastTickTimestamp = timestamp;
-};
-
-const persistPostureData = () => {
-  if (postureAccumulator.sampleCount === 0) {
-    logger.info("No posture data to persist");
-    return;
-  }
-
-  const avgScore = postureAccumulator.scoreSum / postureAccumulator.sampleCount;
-
-  const payload = {
-    date: postureAccumulator.date,
-    secondsInGreen: Math.round(postureAccumulator.secondsInGreen),
-    secondsInYellow: Math.round(postureAccumulator.secondsInYellow),
-    secondsInRed: Math.round(postureAccumulator.secondsInRed),
-    avgScore: Math.round(avgScore * 100) / 100, // Round to 2 decimal places
-    sampleCount: postureAccumulator.sampleCount,
-  };
-
-  logger.info("Persisting posture data", payload);
-
+calibrationFlow.on("progress", (progress) => {
   postMessage({
-    type: WORKER_MESSAGES.persistPostureData,
-    payload,
+    type: WORKER_MESSAGES.calibrationProgress,
+    payload: progress,
   });
-};
+});
 
-// Set up periodic persistence (every 60 seconds)
-const PERSIST_INTERVAL_MS = 60 * 1000; // 60 seconds
-setInterval(persistPostureData, PERSIST_INTERVAL_MS);
+calibrationFlow.on("complete", (result) => {
+  postMessage({
+    type: WORKER_MESSAGES.calibrationComplete,
+    payload: result,
+  });
+});
+
+calibrationFlow.on("failed", (failure) => {
+  postMessage({
+    type: WORKER_MESSAGES.calibrationFailed,
+    payload: failure,
+  });
+});
+const rendererTickTimeout: TimeoutHandle | null = null;
 
 type WorkerInitPayload = {
   guardrailOverrides?: DetectionGuardrailOverrides;
@@ -155,6 +86,19 @@ postMessage({
   },
 });
 
+const engineTickEmitter = new EngineTickEmitter({
+  postMessage,
+  calibrationProvider: () => {
+    const baseline = getLatestCalibrationBaseline();
+    return baseline?.keypoints ?? null;
+  },
+});
+
+// Story 3.3: Track paused state in worker
+let isPausedInWorker = false;
+// Story 3.3: Track if a start operation is in progress to prevent race conditions
+let isStartingEngine = false;
+
 const isEngineFramePayload = (value: unknown): value is EngineFramePayload => {
   if (!value || typeof value !== "object") {
     return false;
@@ -172,12 +116,12 @@ const isEngineFramePayload = (value: unknown): value is EngineFramePayload => {
 };
 
 const handleEngineFrame = (payload: EngineFramePayload) => {
-  // Skip processing if analysis is paused
-  if (isAnalysisPaused) {
-    return;
-  }
-
   try {
+    // Story 3.3: Skip processing if monitoring is paused
+    if (isPausedInWorker) {
+      return;
+    }
+
     const diagnostics = payload.diagnostics ?? null;
     const frameIntervalMs =
       diagnostics?.frameIntervalMs ??
@@ -206,12 +150,10 @@ const handleEngineFrame = (payload: EngineFramePayload) => {
 
     postMessage(message);
 
-    // Update posture accumulator with tick data
-    updatePostureAccumulator(
-      update.tick.zone,
-      update.tick.score,
-      update.tick.t,
-    );
+    calibrationFlow.ingest({
+      metrics: payload.result.metrics ?? null,
+      reliability: payload.result.reliability ?? null,
+    });
   } catch (error) {
     logger.error("EngineCoordinator update failed", {
       error: error instanceof Error ? error.message : String(error),
@@ -246,39 +188,76 @@ port.on("message", (message: WorkerMessage) => {
       }
       break;
     }
-    case WORKER_MESSAGES.triggerWorkerError: {
-      throw new Error("Intentional Worker Error");
+    case WORKER_MESSAGES.calibrationStart: {
+      const options = (message.payload ?? {}) as
+        | CalibrationFlowOptions
+        | undefined;
+      calibrationFlow.start(options ?? {});
+      break;
     }
-    case WORKER_MESSAGES.setPaused: {
-      const payload = message.payload as { paused?: boolean } | undefined;
-      if (payload && typeof payload.paused === "boolean") {
-        isAnalysisPaused = payload.paused;
-        logger.info(`Worker analysis ${isAnalysisPaused ? "paused" : "resumed"}`, {
-          paused: isAnalysisPaused,
-        });
+    case WORKER_MESSAGES.calibrationCancel: {
+      calibrationFlow.cancel("unknown", "Calibration cancelled by caller.");
+      break;
+    }
+    case WORKER_MESSAGES.calibrationApply: {
+      const payload = (message.payload ?? null) as {
+        thresholds?: CalibrationThresholds;
+      } | null;
+      if (payload?.thresholds) {
+        engineCoordinator.updateRiskThresholds(payload.thresholds);
       }
       break;
     }
-    case WORKER_MESSAGES.getDailySummary: {
-      // The worker doesn't have database access, so it will return current accumulator data
-      // The main process will need to fetch from the database
-      postMessage({
-        type: WORKER_MESSAGES.dailySummaryResponse,
-        payload: {
-          currentAccumulator: {
-            date: postureAccumulator.date,
-            secondsInGreen: Math.round(postureAccumulator.secondsInGreen),
-            secondsInYellow: Math.round(postureAccumulator.secondsInYellow),
-            secondsInRed: Math.round(postureAccumulator.secondsInRed),
-            avgScore:
-              postureAccumulator.sampleCount > 0
-                ? Math.round((postureAccumulator.scoreSum / postureAccumulator.sampleCount) * 100) / 100
-                : 0,
-            sampleCount: postureAccumulator.sampleCount,
-          },
-        },
-      });
+    case WORKER_MESSAGES.setPaused: {
+      // Story 3.3: Handle pause/resume monitoring
+      isPausedInWorker = Boolean(message.payload);
+      logger.info(
+        `Worker monitoring ${isPausedInWorker ? "paused" : "resumed"}`,
+      );
+
+      // When paused, stop the engineTickEmitter
+      if (isPausedInWorker) {
+        engineTickEmitter.stop();
+        // Reset the starting flag when pausing
+        isStartingEngine = false;
+      } else {
+        // Story 3.3: Prevent race conditions from rapid pause/resume clicks
+        if (isStartingEngine) {
+          logger.warn(
+            "Engine start already in progress, skipping duplicate start request",
+          );
+          break;
+        }
+
+        isStartingEngine = true;
+        engineTickEmitter
+          .start()
+          .then(() => {
+            isStartingEngine = false;
+            logger.info("Engine successfully restarted after resume");
+            return undefined;
+          })
+          .catch((err: unknown) => {
+            isStartingEngine = false;
+            logger.error("Failed to restart monitoring after resume", {
+              error: err instanceof Error ? err.message : String(err),
+              action:
+                "User should try pausing and resuming again, or restart the application",
+            });
+            // Notify main process about the failure
+            postMessage({
+              type: WORKER_MESSAGES.engineError,
+              payload: {
+                message:
+                  "Failed to restart monitoring. Please try again or restart the application.",
+              },
+            });
+          });
+      }
       break;
+    }
+    case WORKER_MESSAGES.triggerWorkerError: {
+      throw new Error("Intentional Worker Error");
     }
     default: {
       postMessage({
@@ -293,5 +272,12 @@ port.on("message", (message: WorkerMessage) => {
       });
       break;
     }
+  }
+});
+
+process.on("exit", () => {
+  engineTickEmitter.stop();
+  if (rendererTickTimeout) {
+    clearTimeout(rendererTickTimeout);
   }
 });

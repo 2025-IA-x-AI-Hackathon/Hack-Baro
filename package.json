@@ -13,9 +13,6 @@
     "check-types": "pnpm run type-check",
     "clean": "rm -rf node_modules .turbo",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,md,mdx,json,css,scss,yml,yaml}\"",
-    "bmad:refresh": "bmad-method install -f -i codex",
-    "bmad:list": "bmad-method list:agents",
-    "bmad:validate": "bmad-method validate",
     "desktop:install:dev": "cross-env BARO_SKIP_ELECTRON_BUILDER=1 pnpm install",
     "desktop:dev": "pnpm --filter @baro/desktop dev",
     "desktop:package": "pnpm --filter @baro/desktop package"
@@ -38,6 +35,21 @@
   "pnpm": {
     "overrides": {
       "debug": "4.4.3"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "@heroui/shared-utils",
+      "@parcel/watcher",
+      "@swc/core",
+      "@tailwindcss/oxide",
+      "better-sqlite3",
+      "core-js",
+      "core-js-pure",
+      "electron",
+      "electron-winstaller",
+      "esbuild",
+      "lzma-native",
+      "protobufjs",
+      "unrs-resolver"
+    ]
   }
 }
