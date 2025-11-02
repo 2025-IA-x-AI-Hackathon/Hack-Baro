@@ -38,7 +38,7 @@ describe("OnboardingWizard", () => {
     const nextButton = screen.getByRole("button", { name: /next/i });
     await user.click(nextButton);
 
-    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.REQUEST_CAMERA_PERMISSION);
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.requestCameraPermission);
 
     await screen.findByText(/camera access is enabled/i);
   });
@@ -69,11 +69,11 @@ describe("OnboardingWizard", () => {
 
     expect(invoke).toHaveBeenNthCalledWith(
       1,
-      IPC_CHANNELS.REQUEST_CAMERA_PERMISSION,
+      IPC_CHANNELS.requestCameraPermission,
     );
     expect(invoke).toHaveBeenNthCalledWith(
       2,
-      IPC_CHANNELS.OPEN_CAMERA_SETTINGS,
+      IPC_CHANNELS.openCameraPrivacySettings,
     );
   });
 
