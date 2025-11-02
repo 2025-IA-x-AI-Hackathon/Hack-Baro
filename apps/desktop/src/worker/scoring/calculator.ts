@@ -19,7 +19,7 @@ export type ScoreWeights = {
 export type ScoreConfig = {
   weights?: Partial<ScoreWeights>;
   alpha?: number; // EMA for score, default 0.2
-  neutralScore?: number; // default 70 used when frozen without prior score
+  neutralScore?: number; // default 35 used when frozen without prior score
   calibration?: Partial<Calibration>;
 };
 
@@ -53,7 +53,7 @@ export class ScoreProcessor {
   constructor(config?: ScoreConfig) {
     this.alpha = typeof config?.alpha === "number" ? config.alpha : 0.2;
     this.neutral =
-      typeof config?.neutralScore === "number" ? config.neutralScore : 70;
+      typeof config?.neutralScore === "number" ? config.neutralScore : 35;
     this.weights = { ...DEFAULT_WEIGHTS, ...(config?.weights ?? {}) };
     this.calibration = {
       ...DEFAULT_CALIBRATION,

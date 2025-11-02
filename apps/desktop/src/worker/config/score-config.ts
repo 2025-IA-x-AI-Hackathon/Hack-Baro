@@ -15,7 +15,7 @@ export type ResolvedScoreConfig = {
 
 const DEFAULT_SCORE_CONFIG: ResolvedScoreConfig = {
   alpha: 0.2,
-  neutralScore: 70,
+  neutralScore: 35,
   weights: {
     pitchPerDegree: 3,
     ehdPerUnit: 250,
