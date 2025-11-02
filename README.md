@@ -1,133 +1,131 @@
 # Posely
 
-> **Privacy-first posture guidance for healthier desk work**
+> 개인정보를 우선하는 자세 교정 데스크톱 앱
 
-Posely is a cross-platform desktop application that monitors posture entirely on-device. Our hybrid stack pairs **Electron React Boilerplate** for the desktop runtime with a **Turborepo + pnpm** monorepo so every surface (desktop, web) can share tooling, configuration, and automation.
+Posely는 온디바이스(on-device) 환경에서 전적으로 사용자 개인정보를 보호하며 자세를 모니터링하는 크로스플랫폼 데스크톱 애플리케이션입니다.
+`Electron React Boilerplate`를 기반으로 한 데스크톱 런타임과 `Turborepo + pnpm` 모노레포 구조를 결합해, 데스크톱과 웹 환경 모두에서 도구, 설정, 자동화를 공유할 수 있습니다.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Built with Electron](https://img.shields.io/badge/Electron-Latest-47848F.svg)](https://www.electronjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6.svg)](https://www.typescriptlang.org/)
 
----
+***
 
-## 🚀 Quick Start
+## 🚀 빠른 시작 (Quick Start)
 
-### Prerequisites
-
-- **Node.js** ≥ 18
-- **pnpm** ≥ 8 (`npm install -g pnpm`)
+### 필수 조건
+- Node.js ≥ 18
+- pnpm ≥ 8 (`npm install -g pnpm`)
 - Git
 
-### Setup Steps
+### 설치 및 실행 단계
+1. 저장소를 클론하고 의존성을 설치합니다:
 
-1. Clone the repository and install dependencies:
-   ```bash
-   git clone https://github.com/2025-IA-x-AI-Hackathon/Hack-Baro/baro.git
-   cd baro
-   pnpm install
-   ```
-   > Tip: use `pnpm run desktop:install:dev` to install with `BARO_SKIP_ELECTRON_BUILDER=1`, skipping native Electron rebuilds during local development.
-2. Duplicate `.env.example` to `.env` (at the repo root and optionally inside `apps/desktop/`) and fill in monitoring credentials:
-   - `SENTRY_DSN`
-   - `BETTER_STACK_TOKEN`
-   - Optional dev overrides: `ENABLE_SENTRY_IN_DEV`, `ENABLE_BETTER_STACK_IN_DEV`
-3. Start the desktop app:
-   ```bash
-   pnpm dev
-   # or focus on the Electron workspace only
-   pnpm --filter @baro/desktop dev
-   ```
-4. Run quality checks before committing:
-   ```bash
-   pnpm lint
-   pnpm type-check
-   pnpm --filter @baro/desktop test
-   ```
+```
+git clone https://github.com/2025-IA-x-AI-Hackathon/Hack-Baro/baro.git
+cd baro
+pnpm install 
+```
 
-For packaging builds, clear `BARO_SKIP_ELECTRON_BUILDER` and run `pnpm run desktop:package`. macOS builds require an Apple Developer/Distribution certificate; unsigned builds are possible by setting `CSC_IDENTITY_AUTO_DISCOVERY=false`.
+> 💡 팁: 로컬 개발 시 `BARO_SKIP_ELECTRON_BUILDER=1`을 설정하여 네이티브 리빌드를 건너뛸 수 있습니다.
+예시: `pnpm run desktop:install:dev`
 
----
+2. `.env.example`을 복사해 `.env` 파일을 생성하고(루트 및 필요 시 `apps/desktop/` 내부에도 생성) 다음 값을 채웁니다:
 
-## 📁 Monorepo Layout
+- `SENTRY_DSN`
+- `BETTER_STACK_TOKEN`
+- (선택) 개발용 토글: `ENABLE_SENTRY_IN_DEV`, `ENABLE_BETTER_STACK_IN_DEV`
 
+3. 데스크톱 앱 실행:
+```
+pnpm dev
+# 또는 Electron 워크스페이스만 실행
+pnpm --filter @baro/desktop dev
+```
+
+4. 커밋 전 품질 검사:
+
+```
+pnpm lint
+pnpm type-check
+pnpm --filter @baro/desktop test
+```
+
+빌드 및 패키징 시에는 `BARO_SKIP_ELECTRON_BUILDER`를 제거하고 다음을 실행하세요: `pnpm run desktop:package`. macOS 빌드에는 Apple Developer/Distribution 인증서가 필요하며,
+`CSC_IDENTITY_AUTO_DISCOVERY=false` 설정으로 서명 없이 빌드할 수도 있습니다.
+
+***
+
+## 📁 모노레포 구조 (Monorepo Layout)
 ```
 /
 ├── apps/
-│   ├── desktop/                 # Electron workspace (main, renderer, worker, shared)
-│   └── web/                     # Marketing/landing scaffold
+│   ├── desktop/                 # Electron 워크스페이스 (main, renderer, worker, shared)
+│   └── web/                     # 마케팅/랜딩용 스캐폴드
 ├── packages/
-│   ├── eslint-config/           # Shared ESLint presets
-│   ├── i18n-tools/              # Localization CLI & typed resource generation
-│   ├── typescript-config/       # Strict tsconfig presets shared across workspaces
-│   └── ui/                      # Shared UI component library scaffold
-├── .husky/                      # Git hooks (attached during `pnpm install`)
-├── pnpm-workspace.yaml          # Workspace membership & native build allowlist
-├── turbo.json                   # Turborepo task graph + global env configuration
-├── tsconfig.json                # Root TS project references
+│   ├── eslint-config/           # 공통 ESLint 설정
+│   ├── i18n-tools/              # 다국어 리소스 CLI 및 타입 생성기
+│   ├── typescript-config/       # 공통 TypeScript 구성
+│   └── ui/                      # 공용 UI 컴포넌트 라이브러리
+├── .husky/                      # Git 훅 (pnpm install 시 자동 설치)
+├── pnpm-workspace.yaml          # 워크스페이스 구성 및 빌드 허용 목록
+├── turbo.json                   # Turborepo 태스크 그래프 및 전역 환경 설정
+├── tsconfig.json                # 루트 TypeScript 프로젝트 참조
 └── README.md
 ```
 
-### Directory Highlights
+### 주요 디렉터리 설명
+- `apps/desktop/src/main` – 메인 프로세스, IPC 핸들러, OS 통합, 워커 관리
+- `apps/desktop/src/renderer` – React 19 렌더러, Zustand 상태 관리, 다국어 처리
+- `apps/desktop/src/worker` – 자세 분석 등의 백그라운드 연산 처리
+- `apps/desktop/src/shared` – 공용 유틸리티, IPC 채널 정의, 모니터링 설정
+- `apps/desktop/e2e` – Playwright 기반 Electron E2E 테스트
+- `apps/desktop/INTEGRATION.md` – Turborepo 통합 관련 변경 로그
 
-- `apps/desktop/src/main` – Main process, IPC handlers, OS integrations, worker orchestration.
-- `apps/desktop/src/renderer` – React 19 renderer with Zustand stores and internationalization.
-- `apps/desktop/src/worker` – Background thread reserved for posture analysis workloads.
-- `apps/desktop/src/shared` – Shared utilities, IPC channel definitions, monitoring config.
-- `apps/desktop/e2e` – Playwright Electron harness and smoke tests.
-- `apps/desktop/INTEGRATION.md` – Detailed log of ERB modifications applied during Turborepo integration.
-- `packages/i18n-tools` – Generates typed locale resources and scanning helpers.
+- `packages/i18n-tools` – 다국어 타입 생성기 및 헬퍼 스크립트
 
----
+***
 
-## 🛠️ Development Workflows
+## 🛠️ 개발 워크플로우 (Development Workflows)
 
-| Command | Description |
-| ------- | ----------- |
-| `pnpm dev` | Runs Turbo `dev` tasks; launches the Electron app with hot reload. |
-| `pnpm --filter @baro/desktop dev` | Starts only the desktop workspace (useful when other apps remain placeholders). |
-| `pnpm build` | Executes Turborepo build pipeline, including i18n type generation. |
-| `pnpm lint` | Lints all workspaces using shared rules from `@baro/eslint-config`. |
-| `pnpm type-check` | Type-checks every workspace via shared tsconfig presets. |
-| `pnpm --filter @baro/desktop test` | Runs Vitest unit/integration suites for the desktop app. |
-| `pnpm --filter @baro/desktop test:e2e` | Launches Playwright’s Electron harness for end-to-end smoke tests. |
-| `pnpm run desktop:package` | Builds production bundles and packages the Electron app. |
+| 명령어 | 설명 |
+| ------- | ----- |
+| `pnpm dev` | Turbo `dev` 태스크 실행 (핫리로드 포함) |
+| `pnpm --filter @baro/desktop dev` | 데스크톱 워크스페이스만 실행 |
+| `pnpm build` | 빌드 파이프라인 실행 (i18n 타입 포함) |
+| `pnpm lint` | 린트 검사 (`@baro/eslint-config`) |
+| `pnpm type-check` | 타입 검사 실행 |
+| `pnpm --filter @baro/desktop test` | Vitest 단위/통합 테스트 |
+| `pnpm --filter @baro/desktop test:e2e` | Playwright 기반 E2E 테스트 |
+| `pnpm run desktop:package` | 프로덕션 빌드 및 패키징 |
 
-Turborepo caches `build`, `lint`, `type-check`, and `test` results. Use `turbo run <task> --force` when a cold rebuild or retest is required. Husky installs hooks automatically so linting, testing, and i18n type generation run before commits/pushes; bypass only with `--no-verify` in emergencies.
+Turborepo는 `build`, `lint`, `type-check`, `test` 결과를 캐시합니다. 강제 재빌드/재테스트가 필요할 경우 `turbo run <task> --force`를 사용하세요.
 
----
+***
 
-## 🧪 Testing
+## 🧪 테스트 (Testing)
 
-- **Unit & Integration**: `pnpm --filter @baro/desktop test` (Vitest). Use `test:watch` and `test:coverage` variants for rapid feedback and HTML reports (`apps/desktop/coverage/`).
-- **End-to-End**: `pnpm --filter @baro/desktop test:e2e` launches Electron via Playwright. Run `pnpm --filter @baro/desktop exec playwright install --with-deps` once to download browsers.
-- **CI**: `.github/workflows/ci.yml` executes `pnpm turbo run type-check lint build`. Release workflows add packaging steps per operating system.
+- **단위 및 통합 테스트**: `pnpm --filter @baro/desktop test`. `test:watch`, `test:coverage` 옵션을 통해 빠른 피드백과 HTML 리포트(`apps/desktop/coverage/`) 확인 가능
 
----
+- **E2E 테스트**: `pnpm --filter @baro/desktop test:e2e`. Playwright 기반으로 Electron 실행.
+최초 실행 전 브라우저 설치 필요: `pnpm --filter @baro/desktop exec playwright install --with-deps`
 
-## 🔐 Monitoring & Telemetry
 
-Posely integrates **Sentry** for crash/error reporting and **Better Stack Logtail** for centralized structured logging across all Electron processes.
+- **CI(지속 통합)**: `.github/workflows/ci.yml`에서 `pnpm turbo run type-check lint build`를 실행하며,
+OS별 릴리스 워크플로우에는 패키징 단계가 추가됩니다.
 
-- Shared initialization lives in `apps/desktop/src/shared/config/monitoring.ts`, exposing privacy-aware defaults and toggles.
-- Each process (`src/main/sentry.ts`, `src/renderer/sentry.ts`, `src/worker/sentry.ts`) registers global handlers and tags events with the originating process.
-- Populate credentials in `.env` and enable the optional `ENABLE_*_IN_DEV` flags when validating telemetry locally.
+***
 
----
+## 🌐 국제화 (Internationalization)
 
-## 🌐 Internationalization
+로컬라이징 문자열은 `apps/desktop/locales/<locale>`에 위치합니다. 타입 안전한 번역 헬퍼를 생성하려면 아래 명령어를 실행하세요:
 
-Localized strings reside in `apps/desktop/locales/<locale>`. Generate strongly typed translation helpers with:
+`pnpm --filter @baro/desktop run i18n:generate-types`
 
-```bash
-pnpm --filter @baro/desktop run i18n:generate-types
-```
+이 스크립트는 `pnpm build` 중 자동으로 실행되며, 커밋 전 훅에서도 강제됩니다.
 
-The script runs automatically during `pnpm build` and is enforced by the pre-commit hook.
+***
 
----
+## 📚 문서 (Documentation)
 
-## 📚 Documentation
-
-- [`apps/desktop/INTEGRATION.md`](apps/desktop/INTEGRATION.md) – ERB integration notes and upgrade considerations.
-
-Contribute improvements by updating the relevant document and referencing the story that introduced the change.
+`apps/desktop/INTEGRATION.md` – Electron React Boilerplate 통합 기록 및 업그레이드 가이드
