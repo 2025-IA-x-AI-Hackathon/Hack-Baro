@@ -155,8 +155,8 @@ describe("Posture Data Persistence", () => {
     });
   });
 
-  describe("persistPostureData message", () => {
-    it("should have correct message type and payload structure", () => {
+  describe("posture data payload structure", () => {
+    it("should have correct payload structure for persistence", () => {
       const payload = {
         date: "2025-11-02",
         secondsInGreen: 120,
@@ -166,18 +166,13 @@ describe("Posture Data Persistence", () => {
         sampleCount: 180,
       };
 
-      const message = {
-        type: WORKER_MESSAGES.persistPostureData,
-        payload,
-      };
-
-      expect(message.type).toBe(WORKER_MESSAGES.persistPostureData);
-      expect(message.payload.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      expect(typeof message.payload.secondsInGreen).toBe("number");
-      expect(typeof message.payload.secondsInYellow).toBe("number");
-      expect(typeof message.payload.secondsInRed).toBe("number");
-      expect(typeof message.payload.avgScore).toBe("number");
-      expect(typeof message.payload.sampleCount).toBe("number");
+      // Verify payload structure (actual persistence happens in main process)
+      expect(payload.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(typeof payload.secondsInGreen).toBe("number");
+      expect(typeof payload.secondsInYellow).toBe("number");
+      expect(typeof payload.secondsInRed).toBe("number");
+      expect(typeof payload.avgScore).toBe("number");
+      expect(typeof payload.sampleCount).toBe("number");
     });
 
     it("should round zone seconds to integers", () => {
