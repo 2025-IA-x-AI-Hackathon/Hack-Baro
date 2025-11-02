@@ -156,6 +156,7 @@ function CameraPreviewCard({
   detectionEnabled,
   landmarks,
 }: CameraPreviewCardProps) {
+  const { t } = useTranslation(["common"]);
   const [showLandmarks, setShowLandmarks] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -334,9 +335,9 @@ function CameraPreviewCard({
       <CardHeader className="flex flex-col gap-2 text-white">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold">Camera Preview</h2>
+            <h2 className="text-lg font-semibold">{t("cards.camera.title")}</h2>
             <p className="text-sm text-white/70">
-              Confirm your camera and tracking are active.
+              {t("cards.camera.description")}
             </p>
           </div>
           <Switch
@@ -346,7 +347,7 @@ function CameraPreviewCard({
             onValueChange={setShowLandmarks}
             className="shrink-0"
           >
-            Show landmarks
+            {t("cards.camera.showLandmarks")}
           </Switch>
         </div>
       </CardHeader>
@@ -372,26 +373,25 @@ function CameraPreviewCard({
           ) : (
             <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-white/70">
               {detectionEnabled
-                ? "Connecting to camera…"
-                : "Camera permission required to show preview."}
+                ? t("cards.camera.connecting")
+                : t("cards.camera.noPermission")}
             </div>
           )}
         </div>
         <div className="grid gap-2 text-xs text-white/70">
           <div className="flex items-center justify-between">
-            <span>Current zone</span>
+            <span>{t("cards.camera.currentZone")}</span>
             <span className={`font-semibold ${zoneTextClass}`}>
               {zoneLabel}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span>Score</span>
+            <span>{t("cards.camera.score")}</span>
             <span className="font-semibold text-white">{formattedScore}</span>
           </div>
         </div>
         <p className="text-xs text-white/60">
-          The border reflects your live posture zone. Enable landmarks to view
-          the points the model is tracking.
+          {t("cards.camera.scoreDescription")}
         </p>
       </CardBody>
     </Card>
@@ -507,9 +507,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
         logger.error("Failed to load calibration", {
           error: error instanceof Error ? error.message : String(error),
         });
-        setCalibrationStatusError(
-          t("onboarding.calibration.errors.load"),
-        );
+        setCalibrationStatusError(t("onboarding.calibration.errors.load"));
       } finally {
         if (!cancelled) {
           setIsLoadingCalibration(false);
@@ -683,20 +681,13 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
         logger.error("Failed to update calibration sensitivity", {
           error: error instanceof Error ? error.message : String(error),
         });
-        setCalibrationStatusError(
-          t("onboarding.calibration.errors.update"),
-        );
+        setCalibrationStatusError(t("onboarding.calibration.errors.update"));
         return null;
       } finally {
         setIsUpdatingSensitivity(false);
       }
     },
-    [
-      activeCalibration,
-      channels?.calibrationUpdateSensitivity,
-      ipcRenderer,
-      t,
-    ],
+    [activeCalibration, channels?.calibrationUpdateSensitivity, ipcRenderer, t],
   );
 
   const handleSelectSensitivity = useCallback(
@@ -1260,7 +1251,9 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
                         <div className="grid gap-3 md:grid-cols-3">
                           <label className="flex flex-col gap-1 text-xs text-white/80">
                             <span className="uppercase tracking-wide text-white/60">
-                              {t("onboarding.calibration.panel.pitchInputLabel")}
+                              {t(
+                                "onboarding.calibration.panel.pitchInputLabel",
+                              )}
                             </span>
                             <input
                               className="rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-white/40"
