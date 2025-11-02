@@ -1,12 +1,24 @@
 import { ipcMain } from "electron";
+// Disable no-unused-vars lint noise for handler signatures
+/* eslint no-unused-vars: off */
 import { IPC_CHANNELS } from "../../shared/ipcChannels";
 import { getLogger } from "../../shared/logger";
-import type { CalibrationBaselinePayload } from "../../shared/types/calibration";
-import { saveCalibrationBaseline } from "../database/calibrationRepository";
+import type {
+  CalibrationBaselinePayload,
+  CalibrationBaselineRecord,
+} from "../../shared/types/calibration";
+import {
+  getLatestCalibrationBaseline,
+  saveCalibrationBaseline,
+} from "../database/calibrationRepository";
 
 const logger = getLogger("calibration-handler", "main");
 
-const registerCalibrationHandler = (): void => {
+const registerCalibrationHandler = ({
+  onBaselineSaved,
+}: {
+  onBaselineSaved?: (baseline: CalibrationBaselineRecord) => void;
+} = {}): void => {
   ipcMain.handle(
     IPC_CHANNELS.calibrationRequest,
     (_, payload: CalibrationBaselinePayload) => {
@@ -18,6 +30,7 @@ const registerCalibrationHandler = (): void => {
         logger.info(
           `Successfully inserted calibration baseline with id ${result.id}`,
         );
+        onBaselineSaved?.(result);
         return { ok: true as const, baseline: result };
       } catch (error) {
         logger.error(
@@ -35,6 +48,31 @@ const registerCalibrationHandler = (): void => {
       }
     },
   );
+
+  ipcMain.handle(IPC_CHANNELS.calibrationLatest, () => {
+    try {
+      const baseline = getLatestCalibrationBaseline();
+      if (!baseline) {
+        logger.info("No calibration baseline available to return");
+        return { ok: false as const, baseline: null };
+      }
+      logger.info(
+        `Returning latest calibration baseline with id ${baseline.id}`,
+      );
+      return { ok: true as const, baseline };
+    } catch (error) {
+      logger.error(
+        `Failed to retrieve latest calibration baseline: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+      );
+      return {
+        ok: false as const,
+        baseline: null,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  });
 };
 
 export default registerCalibrationHandler;
