@@ -29,7 +29,7 @@ cd Hack-Baro
 pnpm install
 # better-sqlite3 재설치
 pnpm --filter @baro/desktop exec electron-rebuild --force --only better-sqlite3
-# `apps/desktop/src/shared/detection/assets` 아래 mediapipe.zip 의 압축을 풉니다.
+# `apps/desktop/src/shared/detection/assets` 아래 mediapipe.zip 의 압축을 해당 디렉토리에 풉니다.
 ```
 
 2. `.env.example`을 복사해 `.env` 파일을 생성하고(루트 및 필요 시 `apps/desktop/` 내부에도 생성) 다음 값을 채웁니다:
