@@ -1,6 +1,12 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { WeeklyChart, type WeeklyDataPoint } from "../WeeklyChart";
+import WeeklyChart from "../WeeklyChart";
+
+type WeeklyDataPoint = {
+  date: string;
+  avgScore: number;
+  sampleCount: number;
+};
 
 describe("WeeklyChart", () => {
   it("should render 7 bars for a full week", () => {
@@ -10,7 +16,8 @@ describe("WeeklyChart", () => {
       date.setDate(today.getDate() - (6 - i));
       return {
         date: date.toISOString().split("T")[0]!,
-        score: 80 + i * 2,
+        avgScore: 80 + i * 2,
+        sampleCount: 100,
       };
     });
 
@@ -26,11 +33,13 @@ describe("WeeklyChart", () => {
     const mockData: WeeklyDataPoint[] = [
       {
         date: today.toISOString().split("T")[0]!,
-        score: 50,
+        avgScore: 50,
+        sampleCount: 100,
       },
       {
         date: new Date(today.getTime() - 24 * 60 * 60 * 1000).toISOString().split("T")[0]!,
-        score: 100,
+        avgScore: 100,
+        sampleCount: 100,
       },
     ];
 
@@ -53,7 +62,8 @@ describe("WeeklyChart", () => {
     const mockData: WeeklyDataPoint[] = [
       {
         date: today.toISOString().split("T")[0]!,
-        score: 85,
+        avgScore: 85,
+        sampleCount: 100,
       },
     ];
 
@@ -69,7 +79,8 @@ describe("WeeklyChart", () => {
     const mockData: WeeklyDataPoint[] = [
       {
         date: today.toISOString().split("T")[0]!,
-        score: 90,
+        avgScore: 90,
+        sampleCount: 100,
       },
     ];
 
@@ -97,7 +108,8 @@ describe("WeeklyChart", () => {
     const mockData: WeeklyDataPoint[] = [
       {
         date: today.toISOString().split("T")[0]!,
-        score: 85,
+        avgScore: 85,
+        sampleCount: 100,
       },
     ];
 
@@ -117,7 +129,8 @@ describe("WeeklyChart", () => {
     const mockData: WeeklyDataPoint[] = [
       {
         date: today.toISOString().split("T")[0]!,
-        score: 85,
+        avgScore: 85,
+        sampleCount: 100,
       },
     ];
 
