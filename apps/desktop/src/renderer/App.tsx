@@ -48,6 +48,7 @@ import {
   PERFORMANCE_SHORT_SIDE_OPTIONS,
 } from "./detection/detectionPipeline";
 import { useDetectionPipeline } from "./detection/useDetectionPipeline";
+import { useZoneNotifications } from "./hooks/useZoneNotifications";
 import "./styles/globals.css";
 
 type ElectronApi = Window["electron"];
@@ -507,7 +508,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
           error: error instanceof Error ? error.message : String(error),
         });
         setCalibrationStatusError(
-          "Calibration data unavailable. Run calibration to personalise alerts.",
+          t("onboarding.calibration.errors.load"),
         );
       } finally {
         if (!cancelled) {
@@ -523,16 +524,14 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
       logger.error("Unexpected calibration load failure", {
         error: error instanceof Error ? error.message : String(error),
       });
-      setCalibrationStatusError(
-        "Calibration data unavailable. Run calibration to personalise alerts.",
-      );
+      setCalibrationStatusError(t("onboarding.calibration.errors.load"));
       setIsLoadingCalibration(false);
     });
 
     return () => {
       cancelled = true;
     };
-  }, [channels?.calibrationLoad, ipcRenderer]);
+  }, [channels?.calibrationLoad, ipcRenderer, t]);
 
   const currentThresholds = useMemo(() => {
     if (!activeCalibration) {
@@ -685,14 +684,19 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
           error: error instanceof Error ? error.message : String(error),
         });
         setCalibrationStatusError(
-          "Failed to update sensitivity. Please try again.",
+          t("onboarding.calibration.errors.update"),
         );
         return null;
       } finally {
         setIsUpdatingSensitivity(false);
       }
     },
-    [activeCalibration, channels?.calibrationUpdateSensitivity, ipcRenderer],
+    [
+      activeCalibration,
+      channels?.calibrationUpdateSensitivity,
+      ipcRenderer,
+      t,
+    ],
   );
 
   const handleSelectSensitivity = useCallback(
@@ -748,7 +752,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
       !Number.isFinite(ehdValue) ||
       !Number.isFinite(dprValue)
     ) {
-      setCustomSensitivityError("Enter numeric values for all thresholds.");
+      setCustomSensitivityError(t("onboarding.calibration.errors.numeric"));
       return;
     }
 
@@ -757,7 +761,10 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
       pitchValue > thresholdBounds.pitch.max
     ) {
       setCustomSensitivityError(
-        `Pitch must be between ${thresholdBounds.pitch.min.toFixed(1)}° and ${thresholdBounds.pitch.max.toFixed(1)}°.`,
+        t("onboarding.calibration.errors.pitchRange", {
+          min: thresholdBounds.pitch.min.toFixed(1),
+          max: thresholdBounds.pitch.max.toFixed(1),
+        }),
       );
       return;
     }
@@ -767,7 +774,10 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
       ehdValue > thresholdBounds.ehd.max
     ) {
       setCustomSensitivityError(
-        `EHD must be between ${thresholdBounds.ehd.min.toFixed(3)} and ${thresholdBounds.ehd.max.toFixed(3)}.`,
+        t("onboarding.calibration.errors.ehdRange", {
+          min: thresholdBounds.ehd.min.toFixed(3),
+          max: thresholdBounds.ehd.max.toFixed(3),
+        }),
       );
       return;
     }
@@ -777,7 +787,10 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
       dprValue > thresholdBounds.dpr.max
     ) {
       setCustomSensitivityError(
-        `DPR must be between ${thresholdBounds.dpr.min.toFixed(3)} and ${thresholdBounds.dpr.max.toFixed(3)}.`,
+        t("onboarding.calibration.errors.dprRange", {
+          min: thresholdBounds.dpr.min.toFixed(3),
+          max: thresholdBounds.dpr.max.toFixed(3),
+        }),
       );
       return;
     }
@@ -802,6 +815,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
     activeCalibration,
     customSensitivityDraft,
     requestSensitivityUpdate,
+    t,
     thresholdBounds,
   ]);
 
@@ -833,6 +847,8 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
   );
   const [engineTick, setEngineTick] = useState<EngineTick | null>(null);
   const [calibrationAlert, setCalibrationAlert] = useState<string | null>(null);
+
+  useZoneNotifications(engineTick);
 
   useEffect(() => {
     setMainResponse((previous) =>
@@ -907,6 +923,15 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
         if (payload && typeof payload === "object" && "tick" in payload) {
           const enginePayload = payload as EngineTickPayload;
           setEngineTick(enginePayload.tick);
+          return;
+        }
+        if (
+          payload &&
+          typeof payload === "object" &&
+          "score" in payload &&
+          "zone" in payload
+        ) {
+          setEngineTick(payload as EngineTick);
         }
       },
     );
@@ -919,10 +944,14 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
           if (data.reason === "frequent-unreliable") {
             const ratioText =
               typeof data.ratio === "number"
-                ? `${Math.round(data.ratio * 100)}% of frames`
-                : "recent frames";
+                ? t("onboarding.calibration.alerts.ratio.percentage", {
+                    percentage: Math.round(data.ratio * 100),
+                  })
+                : t("onboarding.calibration.alerts.ratio.recentFrames");
             setCalibrationAlert(
-              `Detection frequently reports unreliable posture (${ratioText}). Consider recalibrating or adjusting sensitivity.`,
+              t("onboarding.calibration.alerts.frequentUnreliable", {
+                ratioText,
+              }),
             );
           }
         }
@@ -941,11 +970,20 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
       disposeEngineTick?.();
       disposeCalibrationNudge?.();
     };
-  }, [channels, formatIpcArgs, ipcRenderer]);
+  }, [channels, formatIpcArgs, ipcRenderer, t]);
 
   const detectionStatus = detectionEnabled
     ? detection.status
     : cameraCopy.statusWaiting;
+
+  const getSensitivityLabel = useCallback(
+    (value: CalibrationSensitivity) =>
+      t(
+        `onboarding.calibration.sensitivity.${value}`,
+        formatSensitivityLabel(value),
+      ),
+    [t],
+  );
 
   const renderCameraPermissionCard = () => {
     switch (cameraPermission.state) {
@@ -1049,22 +1087,6 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
     }
   };
 
-  const sendPing = useCallback(() => {
-    setMainResponse(createDefaultState(defaults.waitingForPing));
-    ipcRenderer.sendMessage(channels.rendererPing, {
-      requestedAt: new Date().toISOString(),
-      source: "renderer",
-    });
-  }, [channels.rendererPing, defaults.waitingForPing, ipcRenderer]);
-
-  const pingWorker = useCallback(() => {
-    setWorkerResponse(createDefaultState(defaults.waitingForWorker));
-    ipcRenderer.sendMessage(channels.workerRequest, {
-      requestedAt: new Date().toISOString(),
-      source: "renderer",
-    });
-  }, [channels.workerRequest, defaults.waitingForWorker, ipcRenderer]);
-
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-6 rounded-3xl bg-white/10 p-8 text-left shadow-2xl backdrop-blur">
@@ -1091,7 +1113,9 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
         <section className="flex justify-center">
           <Card className="flex w-full max-w-3xl flex-col gap-3 bg-amber-500/20 p-6 text-left text-amber-50 backdrop-blur">
             <CardHeader className="flex flex-col gap-2">
-              <h2 className="text-lg font-semibold">Calibration Recommended</h2>
+              <h2 className="text-lg font-semibold">
+                {t("onboarding.calibration.banner.title")}
+              </h2>
               <p className="text-sm text-amber-100/90">{calibrationAlert}</p>
             </CardHeader>
             <CardFooter className="gap-3">
@@ -1103,7 +1127,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
                   setShowRecalibration(true);
                 }}
               >
-                Re-calibrate now
+                {t("onboarding.calibration.banner.cta")}
               </Button>
               <Button
                 color="primary"
@@ -1111,7 +1135,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
                   setCalibrationAlert(null);
                 }}
               >
-                Got it
+                {t("onboarding.calibration.banner.dismiss")}
               </Button>
             </CardFooter>
           </Card>
@@ -1138,11 +1162,10 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
           <Card className="w-full max-w-3xl flex-1 bg-black/40 text-left backdrop-blur-xl">
             <CardHeader className="flex flex-col gap-2 text-white">
               <h2 className="text-lg font-semibold">
-                Calibration &amp; Sensitivity
+                {t("onboarding.calibration.panel.title")}
               </h2>
               <p className="text-sm text-white/80">
-                Personalised thresholds keep posture nudges relevant. Re-run
-                calibration anytime your setup changes.
+                {t("onboarding.calibration.panel.description")}
               </p>
             </CardHeader>
             <CardBody className="space-y-4 text-sm text-white/80">
@@ -1151,50 +1174,50 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
                   <div className="grid gap-2 rounded-xl bg-white/5 p-3 text-xs text-white/80 sm:grid-cols-2">
                     <div>
                       <span className="font-semibold text-white/90">
-                        Last calibrated:
+                        {t("onboarding.calibration.panel.lastCalibrated")}
                       </span>{" "}
                       {new Date(activeCalibration.recordedAt).toLocaleString()}
                     </div>
                     <div>
                       <span className="font-semibold text-white/90">
-                        Quality score:
+                        {t("onboarding.calibration.panel.qualityScore")}
                       </span>{" "}
                       {activeCalibration.baseline.quality}/100
                     </div>
                     <div>
                       <span className="font-semibold text-white/90">
-                        Sample count:
+                        {t("onboarding.calibration.panel.sampleCount")}
                       </span>{" "}
                       {activeCalibration.baseline.sampleCount}
                     </div>
                     <div>
                       <span className="font-semibold text-white/90">
-                        Active sensitivity:
+                        {t("onboarding.calibration.panel.activeSensitivity")}
                       </span>{" "}
-                      {formatSensitivityLabel(activeCalibration.sensitivity)}
+                      {getSensitivityLabel(activeCalibration.sensitivity)}
                     </div>
                   </div>
                   {currentThresholds ? (
                     <div className="space-y-2">
                       <p className="text-sm font-semibold text-white">
-                        Threshold overview
+                        {t("onboarding.calibration.panel.thresholdOverview")}
                       </p>
                       <div className="grid gap-2 rounded-xl bg-white/5 p-3 text-xs text-white/80 sm:grid-cols-3">
                         <div>
                           <span className="font-semibold text-white/90">
-                            Pitch threshold:
+                            {t("onboarding.calibration.panel.pitchThreshold")}
                           </span>{" "}
                           {`${formatWithPrecision(currentThresholds.pitch, 2)}°`}
                         </div>
                         <div>
                           <span className="font-semibold text-white/90">
-                            EHD threshold:
+                            {t("onboarding.calibration.panel.ehdThreshold")}
                           </span>{" "}
                           {formatWithPrecision(currentThresholds.ehd, 3)}
                         </div>
                         <div>
                           <span className="font-semibold text-white/90">
-                            DPR threshold:
+                            {t("onboarding.calibration.panel.dprThreshold")}
                           </span>{" "}
                           {formatWithPrecision(currentThresholds.dpr, 3)}
                         </div>
@@ -1203,7 +1226,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
                   ) : null}
                   <div className="space-y-3">
                     <p className="text-sm font-semibold text-white">
-                      Sensitivity presets
+                      {t("onboarding.calibration.panel.sensitivityPresets")}
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {sensitivityOptions.map((option) => {
@@ -1227,7 +1250,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
                               handleSelectSensitivity(option);
                             }}
                           >
-                            {formatSensitivityLabel(option)}
+                            {getSensitivityLabel(option)}
                           </Button>
                         );
                       })}
@@ -1237,7 +1260,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
                         <div className="grid gap-3 md:grid-cols-3">
                           <label className="flex flex-col gap-1 text-xs text-white/80">
                             <span className="uppercase tracking-wide text-white/60">
-                              Pitch threshold (°)
+                              {t("onboarding.calibration.panel.pitchInputLabel")}
                             </span>
                             <input
                               className="rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-white/40"
@@ -1255,13 +1278,15 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
                               }}
                             />
                             <span className="text-white/50">
-                              Range {thresholdBounds.pitch.min.toFixed(1)}°–
-                              {thresholdBounds.pitch.max.toFixed(1)}°
+                              {t("onboarding.calibration.panel.pitchRange", {
+                                min: thresholdBounds.pitch.min.toFixed(1),
+                                max: thresholdBounds.pitch.max.toFixed(1),
+                              })}
                             </span>
                           </label>
                           <label className="flex flex-col gap-1 text-xs text-white/80">
                             <span className="uppercase tracking-wide text-white/60">
-                              EHD threshold
+                              {t("onboarding.calibration.panel.ehdInputLabel")}
                             </span>
                             <input
                               className="rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-white/40"
@@ -1279,13 +1304,15 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
                               }}
                             />
                             <span className="text-white/50">
-                              Range {thresholdBounds.ehd.min.toFixed(3)}–
-                              {thresholdBounds.ehd.max.toFixed(3)}
+                              {t("onboarding.calibration.panel.ehdRange", {
+                                min: thresholdBounds.ehd.min.toFixed(3),
+                                max: thresholdBounds.ehd.max.toFixed(3),
+                              })}
                             </span>
                           </label>
                           <label className="flex flex-col gap-1 text-xs text-white/80">
                             <span className="uppercase tracking-wide text-white/60">
-                              DPR threshold
+                              {t("onboarding.calibration.panel.dprInputLabel")}
                             </span>
                             <input
                               className="rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-white/40"
@@ -1303,8 +1330,10 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
                               }}
                             />
                             <span className="text-white/50">
-                              Range {thresholdBounds.dpr.min.toFixed(3)}–
-                              {thresholdBounds.dpr.max.toFixed(3)}
+                              {t("onboarding.calibration.panel.dprRange", {
+                                min: thresholdBounds.dpr.min.toFixed(3),
+                                max: thresholdBounds.dpr.max.toFixed(3),
+                              })}
                             </span>
                           </label>
                         </div>
@@ -1314,8 +1343,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
                           </p>
                         ) : (
                           <p className="text-xs text-white/60">
-                            Adjust posture deviation thresholds for advanced
-                            tuning.
+                            {t("onboarding.calibration.panel.customHelper")}
                           </p>
                         )}
                         <div className="flex flex-wrap gap-2">
@@ -1326,8 +1354,8 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
                             onPress={handleApplyCustomSensitivity}
                           >
                             {isUpdatingSensitivity
-                              ? "Applying…"
-                              : "Apply custom thresholds"}
+                              ? t("onboarding.calibration.panel.applying")
+                              : t("onboarding.calibration.panel.applyCustom")}
                           </Button>
                           <Button
                             color="secondary"
@@ -1336,7 +1364,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
                             isDisabled={isUpdatingSensitivity}
                             onPress={handleResetCustomSensitivity}
                           >
-                            Reset to recommended
+                            {t("onboarding.calibration.panel.reset")}
                           </Button>
                         </div>
                       </div>
@@ -1344,16 +1372,20 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
                   </div>
                 </>
               ) : (
-                <p>No calibration stored yet.</p>
+                <p>{t("onboarding.calibration.panel.emptyState")}</p>
               )}
               {calibrationStatusError ? (
                 <p className="text-amber-200">{calibrationStatusError}</p>
               ) : null}
               {isUpdatingSensitivity && activeCalibration ? (
-                <p className="text-xs text-white/60">Updating sensitivity…</p>
+                <p className="text-xs text-white/60">
+                  {t("onboarding.calibration.panel.updating")}
+                </p>
               ) : null}
               {isLoadingCalibration ? (
-                <p className="text-white/70">Refreshing calibration status…</p>
+                <p className="text-white/70">
+                  {t("onboarding.calibration.panel.refreshing")}
+                </p>
               ) : null}
             </CardBody>
             <CardFooter className="gap-3">
@@ -1366,7 +1398,9 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
                   setOnboardingComplete(true);
                 }}
               >
-                {activeCalibration ? "Re-calibrate" : "Start calibration"}
+                {activeCalibration
+                  ? t("onboarding.calibration.panel.primaryCta.recalibrate")
+                  : t("onboarding.calibration.panel.primaryCta.start")}
               </Button>
               {showRecalibration ? (
                 <Button
@@ -1376,7 +1410,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
                     setShowRecalibration(false);
                   }}
                 >
-                  Close panel
+                  {t("onboarding.calibration.panel.close")}
                 </Button>
               ) : null}
             </CardFooter>
@@ -1396,7 +1430,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
           <div className="flex w-full max-w-3xl flex-col gap-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-white">
-                Re-run calibration
+                {t("onboarding.calibration.panel.rerunHeading")}
               </h3>
               <Button
                 size="sm"
@@ -1405,7 +1439,7 @@ function IntegrationDashboard({ electron }: { electron: ElectronApi }) {
                   setShowRecalibration(false);
                 }}
               >
-                Cancel
+                {t("onboarding.calibration.panel.cancel")}
               </Button>
             </div>
             <CalibrationFlow
